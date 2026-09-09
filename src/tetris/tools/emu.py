@@ -159,8 +159,8 @@ class Machine:
                 continue
             if op & 0x40:
                 addr = self.mem[pc] | (self.mem[pc+1] << 8); pc += 2
-            h = {2: 8, 6: 8, 7: 16, 0xF: 1}.get(mode, 8)
-            w = {2: 40, 6: 20, 7: 20, 0xF: 40}.get(mode, 40)
+            h = {2: 8, 4: 8, 6: 8, 7: 16, 0xF: 1}.get(mode, 8)
+            w = {2: 40, 4: 40, 6: 20, 7: 20, 0xF: 40}.get(mode, 40)
             for i in range(h):
                 lines.append(dict(mode=mode, addr=addr, sub=i, dli=dli and i == h-1))
             addr = (addr & 0xF000) | ((addr + w) & 0x0FFF)
@@ -180,12 +180,27 @@ class Machine:
         if mode == 2:
             bg = pal[pf[2]]
             fg = pal[(pf[2] & 0xF0) | (pf[1] & 0x0F)]
+            lit = self.cur_lit
             for ci in range(40):
                 ch = self.mem[addr + ci]
                 b = self.mem[chbase + (ch & 0x7F) * 8 + sub]
                 if ch & 0x80: b ^= 0xFF
                 for bit in range(8):
-                    out[ci*8 + bit] = fg if b & (0x80 >> bit) else bg
+                    if b & (0x80 >> bit):
+                        out[ci*8 + bit] = fg; lit[ci*8 + bit] = True
+                    else:
+                        out[ci*8 + bit] = bg
+        elif mode == 4:
+            for ci in range(40):
+                ch = self.mem[addr + ci]
+                b = self.mem[chbase + (ch & 0x7F) * 8 + sub]
+                for p2 in range(4):
+                    v = (b >> (6 - p2*2)) & 3
+                    if v == 0: c = bk
+                    elif v == 3: c = pal[pf[3]] if ch & 0x80 else pal[pf[2]]
+                    else: c = pal[pf[v-1]]
+                    x0 = ci*8 + p2*2
+                    out[x0] = c; out[x0+1] = c
         elif mode in (6, 7):
             row = sub if mode == 6 else sub // 2
             for ci in range(20):
@@ -224,6 +239,9 @@ class Machine:
         if render:
             self.pal = load_pal()
             self.img_lines = []
+            self.lit_lines = []
+            self.pf1_lines = []
+            self.pm_lines = []
         i = 0
         n = len(lines)
         while i < n:
@@ -234,8 +252,9 @@ class Machine:
                 def on_wsync():
                     if state['i'] < n:
                         if render:
+                            self.cur_lit = [False]*320
                             buf = [None]*320; self.render_line(lines[state['i']], buf)
-                            self.img_lines.append(buf)
+                            self.img_lines.append(buf); self.lit_lines.append(self.cur_lit); self.pf1_lines.append(self.reg(0xD017)); self.pm_lines.append([self.reg(0xD012+i) for i in range(4)])
                         state['i'] += 1
                 self.wsync_cb = on_wsync
                 self.run_interrupt(0x0200, False)
@@ -245,8 +264,9 @@ class Machine:
                     break
                 ln = lines[i]
             if render:
+                self.cur_lit = [False]*320
                 buf = [None]*320; self.render_line(ln, buf)
-                self.img_lines.append(buf)
+                self.img_lines.append(buf); self.lit_lines.append(self.cur_lit); self.pf1_lines.append(self.reg(0xD017)); self.pm_lines.append([self.reg(0xD012+i) for i in range(4)])
             i += 1
         if nmien & 0x40:
             self.run_interrupt(0x0222, True)
@@ -265,6 +285,34 @@ class Machine:
         for y, row in enumerate(self.img_lines):
             for x in range(320):
                 px[x, y] = row[x] or (0, 0, 0)
+        # PMG overlay (jen playeri, single-line, PRIOR ignorovan: player navrchu)
+        dmactl = self.reg(0xD400)
+        h = len(self.img_lines)
+        if dmactl & 0x08 and self.reg(0xD01D) & 2:
+            pmbase = self.reg(0xD407) << 8
+            single = bool(dmactl & 0x10)
+            for pnum in range(4):
+                hpos = self.reg(0xD000 + pnum)
+                if not hpos: continue
+                wmul = {0: 1, 1: 2, 3: 4}.get(self.reg(0xD008 + pnum) & 3, 1)
+                base = pmbase + (0x400 if single else 0x200) + pnum * (0x100 if single else 0x80)
+                for y in range(h):
+                    scan = y + 8
+                    idx = scan if single else scan // 2
+                    b = self.mem[base + idx]
+                    if not b: continue
+                    creg = self.pm_lines[y][pnum]
+                    col = self.pal[creg]
+                    for bit in range(8):
+                        if b & (0x80 >> bit):
+                            for k in range(2*wmul):
+                                x = (hpos - 48)*2 + bit*2*wmul + k
+                                if 0 <= x < 320:
+                                    # hi-res trik: rozsviceny pixel textu dostane odstin playera + jas PF1
+                                    if self.lit_lines[y][x]:
+                                        px[x, y] = self.pal[(creg & 0xF0) | (self.pf1_lines[y] & 0x0F)]
+                                    else:
+                                        px[x, y] = col
         img = img.resize((320*scale, h*scale), Image.NEAREST)
         img.save(path)
         return path
