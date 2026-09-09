@@ -4,6 +4,7 @@
 > Obtížnosti: EASY (prázdná studna, NEXT), ADVANCED (struktury, NEXT), EXPERT (struktury, bez NEXT).
 > Barvy PMG jsou konstanty `COL_*` na začátku `tetris.asm` a čekají na doladění uživatelem.
 > HELP obrazovka z menu, P = pauza, ESC = opustit hru. Test: `tools/test_game.py`.
+> Dev režim: OPTION při startu (`DevMode`), level 1–20 v menu, klávesy N (další level) a G (game over).
 
 Tento dokument je soběstačná předávka: kdo ho zvedne, nemusí znovu procházet konverzaci ani
 zdrojáky. Popisuje, k čemu jsme doiterovali v designu a herních pravidlech, co už existuje,

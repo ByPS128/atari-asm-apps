@@ -54,6 +54,13 @@ přímé čtení hardwaru), takže funguje s BASICem i bez něj.
   odspodu zaplní, čeká se na FIRE/START.
 - **Zvuky** – POKEY, 4 kanály, jednoduchý sekvencer v VBI (`SoundTick`).
 
+## Vývojářský režim
+
+Drž **OPTION** při spuštění `tetris.xex`. V menu pak jde vybrat level 1–20 a na herní
+obrazovce vlevo dole svítí `DEV`. Klávesy ve hře: **N** = okamžitě další level (studna se
+vyčistí a načte se struktura levelu), **G** = vynutit game over. Bez OPTION při startu
+klávesy nic nedělají.
+
 ## Rozvržení paměti
 
 | Oblast          | Adresa        | Obsah                                   |

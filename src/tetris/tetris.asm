@@ -120,7 +120,9 @@ SK_ADV    = 1
 SK_EXP    = 2
 
 MAXLEVEL  = 20
-MAXSEL    = 15             ; nejvyssi level volitelny v menu
+MAXSEL    = 15             ; nejvyssi level volitelny v menu (DevMode: MAXLEVEL)
+KEY_N     = $23            ; dev: dalsi level
+KEY_G     = $3D            ; dev: game over
 
 IN_LEFT   = $01
 IN_RIGHT  = $02
@@ -227,6 +229,10 @@ ConsRaw   .byte 0
 ConsNew   .byte 0
 ConsPrev  .byte 0
 KeyCode   .byte $FF
+KeyPrev   .byte $FF
+KeyNew    .byte $FF        ; kod prave stisknute klavesy (jen 1 snimek), jinak $FF
+DevMode   .byte 0          ; 1 = OPTION drzen pri startu
+LevelMax  .byte MAXSEL
 IdleLo    .byte 0
 IdleHi    .byte 0
 
@@ -505,6 +511,7 @@ TxtHn5b   dta d'P',$FF
 TxtHn6a   dta d'MENU',$FF
 TxtHn6b   dta d'ESC',$FF
 TxtDemo   dta d'DEMO',$FF
+TxtDev    dta d'DEV',$FF
 TxtMsgD   dta d'DEMO PLAY - MOVE STICK OR PRESS A KEY',$FF
 TxtMsgP   dta d'PAUSED - PRESS P TO CONTINUE',$FF
 TxtMsgL   dta d'LEVEL COMPLETE - GET READY',$FF
@@ -583,7 +590,14 @@ start
         lda #>Vbi
         sta VVBLKI+1
         jsr InitPMG
-        jsr SetMenuScreen
+        lda CONSOL                  ; OPTION drzen pri startu -> vyvojarsky rezim
+        and #CS_OPTION
+        bne NoDev
+        lda #1
+        sta DevMode
+        lda #MAXLEVEL
+        sta LevelMax
+NoDev   jsr SetMenuScreen
         lda #$C0
         sta NMIEN
         cli
@@ -737,7 +751,8 @@ MenuAdjDown
 LevelUp
         inc MenuLevel
         lda MenuLevel
-        cmp #MAXSEL+1
+        cmp LevelMax
+        beq LU_ok
         bcc LU_ok
         lda #1
         sta MenuLevel
@@ -746,7 +761,7 @@ LU_ok   SFX SFX_MENU
 LevelDown
         dec MenuLevel
         bne LD_ok
-        lda #MAXSEL
+        lda LevelMax
         sta MenuLevel
 LD_ok   SFX SFX_MENU
         rts
@@ -1231,7 +1246,14 @@ FS_normal
         lda #1
         sta AbortFlag
         rts
-FS_2    lda InNew
+FS_2    lda DevMode
+        beq FS_2b
+        lda KeyNew
+        cmp #KEY_N
+        beq FS_devN
+        cmp #KEY_G
+        beq FS_devG
+FS_2b   lda InNew
         and #IN_PAUSE
         bne FS_tog
         lda ConsNew
@@ -1266,6 +1288,26 @@ FS_done ; herni cas (bezi mimo pauzu a game over)
         sta TimeMin
 FS_tc   cld
 FS_t    rts
+FS_devN ; dev: skok na dalsi level
+        lda Level
+        cmp #MAXLEVEL
+        bcs FS_dn1
+        inc Level
+FS_dn1  jsr ClearBoard
+        jsr StartLevel
+        lda #ST_SPAWN
+        sta State
+        SFX SFX_SELECT
+        jmp FS_done
+FS_devG ; dev: vynutit game over (zaplni horni dva radky)
+        ldy #19
+        lda #1
+FS_dg   sta Board,y
+        dey
+        bpl FS_dg
+        lda #ST_SPAWN
+        sta State
+        jmp FS_done
 
 ; ---------------------------------------------------------------------
 ;  Stavovy automat hry
@@ -2182,7 +2224,10 @@ SGS_nn  ; panel
         PUTS GAMESCR+15*40+HINT_COL+1, TxtHn5b
         PUTS GAMESCR+17*40+HINT_COL, TxtHn6a
         PUTS GAMESCR+18*40+HINT_COL+1, TxtHn6b
-        jsr SkillName
+        lda DevMode
+        beq SGS_nd
+        PUTS GAMESCR+24*40+HINT_COL, TxtDev
+SGS_nd  jsr SkillName
         lda #<(GAMESCR+22*40+HINT_COL)
         sta ptr2
         lda #>(GAMESCR+22*40+HINT_COL)
@@ -2709,6 +2754,15 @@ RI_keyup
         lda #$FF
         sta KeyCode
 RI_6    sty InRaw
+        lda #$FF
+        sta KeyNew
+        lda KeyPrev
+        cmp #$FF
+        bne RI_kp
+        lda KeyCode
+        sta KeyNew                  ; nova klavesa (predtim nic)
+RI_kp   lda KeyCode
+        sta KeyPrev
         lda InPrev
         eor #$FF
         and InRaw
