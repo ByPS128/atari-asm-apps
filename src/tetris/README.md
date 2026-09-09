@@ -1,13 +1,13 @@
 # Tetris pro Atari XL/XE (MADS)
 
-Klasický Tetris v 6502 assembleru pro Atari 800XL/XE, inspirovaný mechanikou
-amigáckého *Tetris Pro* (Logic Systems, 1993): každý level začíná s několika
-řádky „smetí" a je splněn, jakmile se herní plocha úplně vyprázdní.
+Klasický Tetris v 6502 assembleru pro Atari 800XL/XE, inspirovaný amigáckým
+*Tetris Pro* (Logic Systems, 1993): každý level má cíl v řádcích a rychlost,
+ve vyšších obtížnostech začíná se startovními strukturami cihel ve studně.
 
 ## Build
 
 ```
-make.bat            ; = mads tetris.asm -o:tetris.xex -t:tetris.lab
+make.bat            ; = mads tetris.asm -o:tetris.xex -t:tetris.lab (+ design*.xex)
 ```
 
 Výsledek `tetris.xex` spustíš v libovolném emulátoru (Altirra, atari800) nebo na
@@ -22,8 +22,8 @@ přímé čtení hardwaru), takže funguje s BASICem i bez něj.
 | rotace               | FIRE / nahoru   | šipka nahoru, Z, X    |
 | soft drop            | dolů            | šipka dolů            |
 | hard drop            | –               | MEZERNÍK              |
-| pauza                | –               | START, P              |
-| zpět do menu         | –               | ESC                   |
+| pauza                | –               | P, START              |
+| opustit hru (menu)   | –               | ESC                   |
 | menu: level / skill  | vlevo / vpravo  | SELECT / OPTION       |
 
 ## Obrazovky a mechaniky

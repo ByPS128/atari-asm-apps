@@ -118,7 +118,7 @@ DLI s WSYNC, PMG včetně hi-res triku a barev po řádcích) + `test_*.py`.
 
 ```
 cd src/tetris && make.bat                 # tetris.xex, design*.xex
-cd tools && python test_flow.py && python test_demo.py && python test_misc.py
+cd tools && python test_game.py
 python -c "from emu import Machine; m=Machine(); m.run(120); m.screenshot('out.png')"
 ```
 Po přepisu: aktualizovat testy na `BH=24`, `Board` 240 B, nové pozice textů (`text_rows(0x6000, 26)`).
