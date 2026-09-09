@@ -1,5 +1,10 @@
 # Tetris pro Atari XL/XE – handoff (stav k 9. 9. 2026)
 
+> **Stav:** body 2, 3 a 5 jsou implementovány v `tetris.asm` (commit na `feature/tetris`).
+> Obtížnosti: EASY (prázdná studna, NEXT), ADVANCED (struktury, NEXT), EXPERT (struktury, bez NEXT).
+> Barvy PMG jsou konstanty `COL_*` na začátku `tetris.asm` a čekají na doladění uživatelem.
+> HELP obrazovka z menu, P = pauza, ESC = opustit hru. Test: `tools/test_game.py`.
+
 Tento dokument je soběstačná předávka: kdo ho zvedne, nemusí znovu procházet konverzaci ani
 zdrojáky. Popisuje, k čemu jsme doiterovali v designu a herních pravidlech, co už existuje,
 co se přepisuje, a jak se to ověřuje.

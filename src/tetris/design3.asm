@@ -98,14 +98,10 @@ start
         sta VVBLKI
         lda #>Vbi
         sta VVBLKI+1
-        lda #<Dli
-        sta VDSLST
-        lda #>Dli
-        sta VDSLST+1
         jsr ClearScreen
         jsr InitPMG
         jsr DrawMockup
-        lda #$C0
+        lda #$40
         sta NMIEN
         cli
 Loop    jmp Loop
@@ -131,18 +127,17 @@ Vbi
         lda #0
         sta COLBK                   ; cerny okraj
         sta COLPF2                  ; cerne pozadi (radek 0; dalsi radky prebarvuje DLI)
-        sta DliRow
         lda #$0C                    ; jas textu
         sta COLPF1
         ; barvy playeru: lum 0 = pozadi pruhu zustane cerne, text dostane odstin
-        lda #$90                    ; napoveda vlevo: modra
+        lda #$B0                    ; napoveda vlevo: tyrkysova
         sta COLPM0
-        lda #$20                    ; panel vpravo: oranzova/zlata
+        lda #$20                    ; panel vpravo: oranzova
         sta COLPM0+1
-        lda RowHue                  ; studna: P2 (quad, sloupce 14..21) + P3 (double, 22..25)
+        lda #$02                    ; studna: tmave seda, jednobarevna (P2 quad 14..21 + P3 double 22..25)
         sta COLPM0+2
         sta COLPM0+3
-        lda #48+4*1                 ; P0: sloupce 1..8 (quad = 8 znaku)
+        lda #48+4*1                 ; P0: sloupce 1..8 (text 2..7 -> okraj 1 znak)
         sta HPOSP0
         lda #48+4*29                ; P1: sloupce 29..36
         sta HPOSP1
@@ -158,26 +153,6 @@ Vbi
         sta SIZEP0+3
         jmp XITVBV
 
-; DLI na konci kazdeho radku: barva pozadi/odstin bloku pro dalsi radek (gradient studny)
-Dli
-        pha
-        txa
-        pha
-        inc DliRow
-        ldx DliRow
-        lda RowHue,x
-        sta WSYNC
-        sta COLPM0+2                ; odstin studny pro dalsi radek (jen playeri P2/P3)
-        sta COLPM0+3
-        pla
-        tax
-        pla
-        rti
-
-; odstin (lum 0) studny pro radky 0..25: modra nahore -> cervena dole
-RowHue  .byte $80,$80,$80,$80,$80,$90,$90,$90,$90,$A0,$A0,$A0,$A0,$B0,$B0,$B0
-        .byte $C0,$C0,$C0,$10,$10,$20,$20,$30,$30,$30
-
 ; PMG: P0 radky 2..22 (napoveda), P1 radky 8..23 (panel), P2/P3 radky 0..23 (steny)
 InitPMG
         ldy #0
@@ -190,11 +165,11 @@ IP_c    sta PMAREA+$300,y
         iny
         bne IP_c
         ; radek r zacina na scanline 16+8*r
-        ldx #16+8*2
+        ldx #16+8*1
 IP_0    lda #$FF
         sta PMAREA+$400,x
         inx
-        cpx #16+8*23
+        cpx #16+8*24
         bne IP_0
         ldx #16+8*8
 IP_1    lda #$FF
@@ -290,30 +265,30 @@ DM_f    sta SCREEN+WELL_H*40,x
         sta SCREEN+3*40+34
         sta SCREEN+4*40+32
         sta SCREEN+4*40+33
-        TEXT 29,9,TxLevel
+        TEXT 30,9,TxLevel
         TEXT 30,10,TxLevelV
-        TEXT 29,12,TxScore
+        TEXT 30,12,TxScore
         TEXT 30,13,TxScoreV
-        TEXT 29,15,TxLines
+        TEXT 30,15,TxLines
         TEXT 30,16,TxLinesV
-        TEXT 29,18,TxRows
+        TEXT 30,18,TxRows
         TEXT 30,19,TxRowsV
-        TEXT 29,21,TxTime
+        TEXT 30,21,TxTime
         TEXT 30,22,TxTimeV
         ; napoveda vlevo
-        TEXT 1,2,TxH1a
+        TEXT 2,2,TxH1a
         TEXT 3,3,TxH1b
-        TEXT 1,5,TxH2a
+        TEXT 2,5,TxH2a
         TEXT 3,6,TxH2b
-        TEXT 1,8,TxH3a
+        TEXT 2,8,TxH3a
         TEXT 3,9,TxH3b
-        TEXT 1,11,TxH4a
+        TEXT 2,11,TxH4a
         TEXT 3,12,TxH4b
-        TEXT 1,14,TxH5a
+        TEXT 2,14,TxH5a
         TEXT 3,15,TxH5b
-        TEXT 1,17,TxH6a
+        TEXT 2,17,TxH6a
         TEXT 3,18,TxH6b
-        TEXT 1,22,TxSkill
+        TEXT 2,22,TxSkill
         rts
 
 ; ramecek NEXT: 6x6 znaku (radky 1..6, sloupce 31..36), vnitrek 4x4 = nejvetsi dilek
@@ -393,10 +368,9 @@ TxSkill  dta d'BASIC',$FF
         org $7400
 DL
         .byte $70                   ; jen 8 prazdnych linek nahore -> misto pro 26 radku
-        .byte $C2                   ; radek 0 + DLI
+        .byte $42
         dta a(SCREEN)
-        :24 .byte $82               ; radky 1..24 s DLI
-        .byte $02                   ; radek 25
+        :25 .byte $02
         .byte $41
         dta a(DL)
 

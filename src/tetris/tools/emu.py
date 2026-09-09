@@ -368,7 +368,7 @@ class Machine:
 
     def board(self):
         b = self.label('Board')
-        return [list(self.mem[b + y*10: b + y*10 + 10]) for y in range(20)]
+        return [list(self.mem[b + y*10: b + y*10 + 10]) for y in range(24)]
 
     def board_str(self):
         rows = []
