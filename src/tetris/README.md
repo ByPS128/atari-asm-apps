@@ -32,7 +32,8 @@ přímé čtení hardwaru), takže funguje s BASICem i bez něj.
 - **Menu** – START GAME, LEVEL (1–15), SKILL (EASY / ADVANCED / EXPERT), HELP.
   EASY = prázdná studna a náhled NEXT, ADVANCED = startovní struktury cihel v každém
   levelu, EXPERT = struktury a bez náhledu NEXT.
-- **HELP** – obrazovka s popisem obtížností, levelů a ovládání.
+- **HELP** – dvě stránky: obtížnosti, levely a ovládání; bodování (tabulka bodů za
+  1–4 řady, dropy, bonus za level). Libovolná klávesa listuje, ESC vrací do menu.
 - **Demo** – po ~15 s nečinnosti v menu se spustí demo: AI (heuristika výška /
   díry / nerovnost / smazané řady + náhodný šum) hraje jako průměrný hráč
   lidským tempem. Blikající nápis DEMO nad nápovědou a hláška dole. Jakýkoliv

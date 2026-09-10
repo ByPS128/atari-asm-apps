@@ -572,8 +572,44 @@ HelpTab
         dta d'ESC                ABANDON GAME',$FF
         .byte 22,1
         dta d'SELECT / OPTION    LEVEL / SKILL (MENU)',$FF
-        .byte 24,4
-        dta d'PRESS ANY KEY OR FIRE TO RETURN',$FF
+        .byte 24,2
+        dta d'ANY KEY = NEXT PAGE     ESC = MENU',$FF
+        .byte $FF
+
+; HELP strana 2: bodovani
+HelpTab2
+        .byte 1,12
+        dta d'TETRIS - SCORING',$FF
+        .byte 3,1
+        dta d'ROWS CLEARED AT ONCE     POINTS',$FF
+        .byte 4,1
+        dta d'1 ROW                 40 X LEVEL',$FF
+        .byte 5,1
+        dta d'2 ROWS               100 X LEVEL',$FF
+        .byte 6,1
+        dta d'3 ROWS               300 X LEVEL',$FF
+        .byte 7,1
+        dta d'4 ROWS (TETRIS)     1200 X LEVEL',$FF
+        .byte 9,1
+        dta d'THE MORE ROWS YOU CLEAR WITH ONE',$FF
+        .byte 10,1
+        dta d'PIECE, THE MORE EACH ROW IS WORTH.',$FF
+        .byte 12,1
+        dta d'SOFT DROP (DOWN)       1 PER CELL',$FF
+        .byte 13,1
+        dta d'HARD DROP (SPACE)      2 PER CELL',$FF
+        .byte 14,1
+        dta d'LEVEL COMPLETE       1000 X LEVEL',$FF
+        .byte 16,1
+        dta d'LEVEL',$FF
+        .byte 17,1
+        dta d'EACH LEVEL FALLS FASTER AND NEEDS',$FF
+        .byte 18,1
+        dta d'MORE ROWS (SEE ROWS X/Y). A HIGHER',$FF
+        .byte 19,1
+        dta d'START LEVEL MEANS MORE POINTS.',$FF
+        .byte 24,2
+        dta d'ANY KEY = BACK TO MENU',$FF
         .byte $FF
 
 ; =====================================================================
@@ -913,7 +949,8 @@ CI3     sta MENU_IT3,y
         rts
 
 ; ---------------------------------------------------------------------
-;  HELP obrazovka (pouziva herni DL bez PMG); vraci po libovolnem vstupu
+;  HELP obrazovka, 2 stranky (pouziva herni DL bez PMG); libovolny vstup
+;  = dalsi stranka / navrat, ESC = navrat hned
 ; ---------------------------------------------------------------------
 HelpScreen
         jsr ClearGameScr
@@ -935,6 +972,21 @@ HelpScreen
         sta ptr
         lda #>HelpTab
         sta ptr+1
+        jsr HelpPage
+        lda InNew
+        and #IN_ESC
+        bne HS_x                    ; ESC = rovnou do menu
+        jsr ClearGameScr
+        lda #<HelpTab2
+        sta ptr
+        lda #>HelpTab2
+        sta ptr+1
+        jsr HelpPage
+HS_x    jsr WaitRelease
+        rts
+
+; vykresli stranku (ptr -> tabulka radek,sloupec,text; konec $FF) a ceka na vstup
+HelpPage
 HS_line ldy #0
         lda (ptr),y
         cmp #$FF
@@ -970,7 +1022,6 @@ HS_l    jsr WaitFrame
         ora ConsNew
         beq HS_l
         SFX SFX_SELECT
-        jsr WaitRelease
         rts
 
 ; ---------------------------------------------------------------------
