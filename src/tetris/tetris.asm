@@ -171,6 +171,8 @@ SFX_MENU   = 9
 SFX_SELECT = 10
 SFX_PAUSE  = 11
 SFX_NOROT  = 12
+SFX_COUNTA = 13            ; napocet skore: dvoukanalova smycka (8 snimku, opakuje ScoreTick)
+SFX_COUNTB = 14
 
 ; ---------------------------------------------------------------------
 ;  Nulta stranka
@@ -288,7 +290,8 @@ DropCells .byte 0
 LinesNow  .byte 0
 ScoreRem  .byte 0,0        ; zbyvajici bonus za rady v jednotkach 10 bodu (binarne, lo/hi)
 ScoreN    .byte 0,0        ; celkovy bonus v jednotkach (N)
-ScoreAcc  .byte 0,0        ; akumulator: kazdy snimek += N, za kazdych FLASH_LEN jedna jednotka
+ScoreAcc  .byte 0,0        ; akumulator: kazdy snimek += N, za kazdych ScoreLen jedna jednotka
+ScoreLen  .byte 0          ; delka animace skore ve snimcich (rady 24, level 48)
 SeqCnt    .byte 0          ; citac snimku pro blokujici sekvence (level done, game over)
 SeqRow    .byte 0
 
@@ -478,6 +481,7 @@ FillerB dta c'##.#.#.##.'
 ; skore za 1..4 rad (BCD, x level)
 UnitTab   .byte 0,4,10,30,120       ; body za 1-4 rady / 10 (x level), pricitaji se behem blikani
 FLASH_LEN = 24                      ; delka blikani ve snimcich
+BONUS_LEN = 48                      ; delka animace bonusu za level
 
 Rainbow   .byte $1A,$1C,$2A,$2C,$3A,$3C,$4A,$4C,$5A,$5C,$6A,$6C,$7A,$7C,$8A,$8C
           .byte $9A,$9C,$AA,$AC,$BA,$BC,$CA,$CC,$DA,$DC,$EA,$EC,$FA,$FC,$0A,$0E
@@ -1852,21 +1856,26 @@ ScoreLines
         rts
 
 ; ---------------------------------------------------------------------
-;  Bonus za rady se pricita postupne behem blikani (FLASH_LEN snimku):
-;  N = UnitTab[FullCnt] * Level jednotek po 10 bodech (binarne, max 1800).
+;  Animace skore: bonus (rady behem blikani FLASH_LEN snimku, level BONUS_LEN snimku)
+;  se pricita postupne. N = jednotek po 10 bodech (binarne, max 1800).
 ;  Rozlozeni bez deleni (Bresenham): kazdy snimek ScoreAcc += N a za kazdych
-;  FLASH_LEN v akumulatoru se pricte 1 jednotka -> po FLASH_LEN snimcich presne N,
-;  rovnomerne i pro male bonusy (40 bodu = 4 dily po 6 snimcich).
+;  ScoreLen v akumulatoru se pricte 1 jednotka -> po ScoreLen snimcich presne N,
+;  rovnomerne i pro male bonusy (40 bodu = 4 dily po 6 snimcich). Po dobu napoctu
+;  hraje smycka SFX_COUNTA/B (kanaly 0+1), ScoreTick ji opakuje.
 ; ---------------------------------------------------------------------
 StartClearScore
+        ldx FullCnt
+        lda UnitTab,x
+        ldy #FLASH_LEN
+; A = jednotek na level, Y = delka animace -> N = A * Level, animace bezi pres ScoreTick
+StartScoreAnim
+        sta tmp
+        sty ScoreLen
         lda #0
         sta ScoreN
         sta ScoreN+1
         sta ScoreAcc
         sta ScoreAcc+1
-        ldx FullCnt
-        lda UnitTab,x
-        sta tmp
         ldx Level
 SCS_m   lda ScoreN                  ; ScoreN += UnitTab (Level krat)
         clc
@@ -1897,7 +1906,7 @@ ScoreTick
         ldx #0                      ; X = jednotek ted
 ST_d    lda ScoreAcc
         sec
-        sbc #FLASH_LEN
+        sbc ScoreLen
         tay
         lda ScoreAcc+1
         sbc #0
@@ -1907,8 +1916,12 @@ ST_d    lda ScoreAcc
         inx
         bne ST_d
 ST_add  txa
-        beq ST_none
-        jmp AddUnits
+        beq ST_snd
+        jsr AddUnits
+ST_snd  lda SndPtrHi                ; smycka napoctu: kdyz dohrala, spustit znovu
+        bne ST_none
+        SFX SFX_COUNTA
+        SFX SFX_COUNTB
 ST_none rts
 
 ; A = pocet jednotek (< 100) -> odecist ze ScoreRem (max do 0) a pricist A*10 ke skore
@@ -1973,23 +1986,20 @@ LevelDoneSeq
         sta MsgId
         SFX SFX_FANF1
         SFX SFX_FANF2
-        ; bonus 1000 x level
-        lda #$00
-        sta tmp
-        lda #$10
-        sta tmp2
-        ldx Level
-LDS_b   jsr AddScore
-        dex
-        bne LDS_b
+        ; bonus 1000 x level = 100 x level jednotek, naskakuje BONUS_LEN snimku s tiky
+        lda #100
+        ldy #BONUS_LEN
+        jsr StartScoreAnim
         lda #150
         sta SeqCnt
 LDS_l   jsr FrameStep
         lda AbortFlag
         bne LDS_x
+        jsr ScoreTick
         jsr RenderGame
         dec SeqCnt
         bne LDS_l
+        jsr ScoreFlush
         lda Level
         cmp #MAXLEVEL
         bcs LDS_nl
@@ -3163,9 +3173,9 @@ ST_next dex
         rts
 
 ; sfx tabulky: kanal + adresa dat
-SfxChan .byte 0,0,1,1,2,2,2,3,2,0,0,1,0
-SfxLo   .byte <SdMove,<SdRot,<SdDrop,<SdSoft,<SdLine,<SdTetris,<SdFanf1,<SdFanf2,<SdOver,<SdMenu,<SdSelect,<SdPause,<SdNoRot
-SfxHi   .byte >SdMove,>SdRot,>SdDrop,>SdSoft,>SdLine,>SdTetris,>SdFanf1,>SdFanf2,>SdOver,>SdMenu,>SdSelect,>SdPause,>SdNoRot
+SfxChan .byte 0,0,1,1,2,2,2,3,2,0,0,1,0,0,1
+SfxLo   .byte <SdMove,<SdRot,<SdDrop,<SdSoft,<SdLine,<SdTetris,<SdFanf1,<SdFanf2,<SdOver,<SdMenu,<SdSelect,<SdPause,<SdNoRot,<SdCountA,<SdCountB
+SfxHi   .byte >SdMove,>SdRot,>SdDrop,>SdSoft,>SdLine,>SdTetris,>SdFanf1,>SdFanf2,>SdOver,>SdMenu,>SdSelect,>SdPause,>SdNoRot,>SdCountA,>SdCountB
 
 ; data: AUDF, AUDC, delka (snimky); delka 0 = konec
 SdMove   .byte $40,$A4,2, 0,0,0
@@ -3181,6 +3191,10 @@ SdOver   .byte $28,$A8,10, $2F,$A8,10, $3C,$A8,10, $50,$A8,10, $79,$AA,25, $FF,$
 SdMenu   .byte $28,$A4,1, $20,$A4,1, 0,0,0
 SdSelect .byte $20,$A6,3, $10,$A8,5, 0,0,0
 SdPause  .byte $40,$A6,3, $60,$A6,3, 0,0,0
+; napocet skore: vlastni 8snimkova smycka (zaznam = 2 snimky), ScoreTick ji opakuje
+; kanal 0 = cinkani stridajici tri vysky, kanal 1 = tichy hluboky puls jednou za smycku
+SdCountA .byte $38,$A8,1, $2C,$A6,1, $24,$A8,1, $2C,$A6,1, 0,0,0
+SdCountB .byte $90,$A4,1, $90,$A2,1, $90,$00,1, $90,$00,1, 0,0,0
 
 ; =====================================================================
 ;  Preruseni

@@ -65,4 +65,30 @@ steps = [i for i in range(1, len(vals)) if vals[i] != vals[i-1]]
 check(steps == [6, 12, 18, 24], 'radky: dily na snimcich 6/12/18/24 (%s)' % steps)
 drop = 2 * (22 - y0)                                       # hard drop: 2 body za bunku (T dosedne na y=22)
 check(vals[-1] == s0 + drop + 40 * m.mem[m.label('Level')], 'radky: konecne skore = drop + 40 x level (%d)' % vals[-1])
+cnt = [v for f, a, v in m.pokey_log if a == 0 and v in (0x38, 0x2C, 0x24)]   # AUDF1 = smycka napoctu
+check(len(cnt) >= 10, 'radky: behem napoctu hraje smycka, %d zaznamu' % len(cnt))
+
+# bonus za level naskakuje 48 snimku a tika
+m = Machine(seed=5); m.load_labels()
+m.run(30); m.tap(fire=True); m.run(20); m.tap(consol='start'); m.run(5); m.run(10)
+B = m.label('Board')
+for x in range(10):
+    if x not in (3, 4, 5): m.mem[B + 23*10 + x] = 1
+m.mem[m.label('RowsInLevel')] = m.mem[m.label('RowsTarget')] - 1
+lvl = m.mem[m.label('Level')]
+m.set_key(0x21); m.run(1); m.set_key(None)
+s1 = score(m) + 40 * lvl                                   # po dropu; + rada, kterou smaze
+m.run(23)                                                  # konec blikani, pred LevelDoneSeq
+n0 = len(m.pokey_log)
+check(m.mem[m.label('MsgId')] == 0, 'level: pred sekvenci jeste bez hlasky')
+vals = []
+for _ in range(60):
+    m.run(1); vals.append(score(m))
+check(m.mem[m.label('MsgId')] == 3, 'level: sekvence LEVEL COMPLETE bezi')
+check(vals[-1] == s1 + 1000 * lvl, 'level: bonus 1000 x level pricten (%d -> %d)' % (s1, vals[-1]))
+done = vals.index(vals[-1])
+check(all(b >= a for a, b in zip(vals, vals[1:])) and len(set(vals)) > 10 and 44 <= done <= 50,
+      'level: bonus naskakuje postupne, dojde ve snimku %d' % done)
+tk = [v for f, a, v in m.pokey_log[n0:] if a == 0 and v in (0x38, 0x2C, 0x24)]
+check(len(tk) >= 24, 'level: smycka napoctu hraje po celou dobu (%d zaznamu)' % len(tk))
 print('ALL OK')
