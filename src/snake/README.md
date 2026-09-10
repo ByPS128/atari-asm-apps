@@ -34,7 +34,7 @@ reálném stroji přes loader. Hra nepoužívá OS (vlastní display list, VBI, 
 - **Kolize** – náraz do ohrady nebo do vlastního těla; detekuje se čtením
   videopaměti na políčku nové hlavy (had se kreslí inkrementálně: smaže se ocas,
   přikreslí hlava, stará hlava se přebarví na tělo).
-- **GAME OVER** – červené pozadí, nápis a čekání na FIRE / RETURN; skóre zůstává
+- **GAME OVER** – tmavě šedé pozadí, nápis a čekání na FIRE / RETURN; skóre zůstává
   vidět.
 ## Grafika a zvuk
 
@@ -48,7 +48,14 @@ reálném stroji přes loader. Hra nepoužívá OS (vlastní display list, VBI, 
   Tělo = `BodyTab[in*4+out]` (rovně, nebo roh spojující vstupní a výstupní stranu),
   hlava = `HeadTab[dir]`, ocas = `TailTab[směr k dalšímu segmentu]`.
 - **Ohrada** z ROM rámečkových znaků (CTRL-Q/E/Z/C rohy, CTRL-R vodorovně, `|` svisle).
-- **ABOUT** – nápověda ukazuje skutečný glyf jablka; v levém horním rohu je dekorační
+- **Jablko přes PMG.** Znak jablka nese jen odlesk; tělo kreslí player 0 (červená
+  `COL_APPLE`), stopku s lístkem player 1 (zelená `COL_LEAF`), oba na stejném HPOS.
+  `PRIOR = 1` (hráči nad playfieldem): pixel textu nad hráčem dostane odstín hráče a jas
+  textu, pixel hráče mimo text má barvu hráče, zbytek buňky zůstává barvou pozadí. Sprite
+  má tvar jablka, ne celé buňky, proto pozadí kolem jablka nemění barvu. `AppleShow` /
+  `AppleHide` udržují znak i data hráčů (`P0DATA`/`P1DATA`, řádek = `32 + 8*y`),
+  `ClearScreen` sprite schová. Barvy ploch: menu `$94`, hra `$74`, game over `$04`.
+- **ABOUT** – nápověda ukazuje skutečné jablko (znak + sprite); v levém horním rohu je dekorační
   had (7 znaků: ocas, svislé tělo, roh, vodorovné tělo, hlava), jehož hlava v náhodných
   intervalech (60–187 snímků) na 6 snímků mrkne (glyf `HEAD_R_BLINK`).
 - **Menu** má vlastní display list: titulek SNAKE v ANTIC módu 6 (dvojnásobná šířka,

@@ -43,6 +43,11 @@ COLPF2   = $D018
 COLPF3   = $D019
 COLBK    = $D01A
 GRACTL   = $D01D
+HPOSP0   = $D000
+SIZEP0   = $D008
+COLPM0   = $D012
+PRIOR    = $D01B
+PMBASE   = $D407
 CONSOL   = $D01F
 
 PORTA    = $D300
@@ -60,6 +65,10 @@ SKCTL    = $D20F
 SCREEN   = $3000           ; 40x24 = 960 bajtu videopameti
 FONT     = $3400           ; kopie ROM fontu + glyfy hada (1 KB, zarovnano)
 ROMFONT  = $E000
+PMAREA   = $3800           ; PMG single-line (2 KB zarovnano); P0 data na +$400
+P0DATA   = PMAREA+$400
+P1DATA   = PMAREA+$500
+PM_Y0    = 32              ; index radku 0 v datech hrace (8 + 3x8 prazdnych radku DL)
 SCREEN_W = 40
 SCREEN_H = 24
 
@@ -113,10 +122,12 @@ DIR_LEFT  = 3
 
 ; barvy pozadi (COLPF2) jednotlivych obrazovek
 COL_MENU  = $94
-COL_GAME  = $B2
-COL_OVER  = $34
+COL_GAME  = $74
+COL_OVER  = $04
 COL_TEXT  = $0E            ; jas textu (COLPF1)
 COL_TITLE = $2A            ; titulek SNAKE v mode 6 (COLPF3)
+COL_APPLE = $24            ; telo jablka (player 0)
+COL_LEAF  = $C8            ; stopka a listek (player 1)
 
 ; ---------------------------------------------------------------------
 ;  Nulta stranka
@@ -193,6 +204,8 @@ Idx       .byte 0          ; pomocny index
 Idx2      .byte 0
 Blink     .byte 0          ; About: snimku do zmeny stavu oci
 Eyes      .byte 0          ; About: 0 = otevrene, 1 = zavrene
+AppleHpos .byte 0          ; HPOSP0 (0 = sprite mimo obraz)
+ApplePmY  .byte 0          ; index prvniho radku jablka v P0DATA
 
 SnakeX    .ds MAX_LEN      ; [0] = hlava
 SnakeY    .ds MAX_LEN
@@ -216,6 +229,11 @@ BodyTab .byte GLYPH0+1,GLYPH0+5,GLYPH0+1,GLYPH0+3   ; in UP:    -,RD,-,LD
         .byte GLYPH0+1,GLYPH0+4,GLYPH0+1,GLYPH0+2   ; in DOWN:  -,RU,-,LU
         .byte GLYPH0+4,GLYPH0+0,GLYPH0+5,GLYPH0+0   ; in LEFT:  RU,-,RD,-
 
+; jablko: telo = player 0, stopka + listek = player 1 (1 bit = 2 px znaku,
+; pouzit jen horni nibble = 1 znak); oba na stejnem HPOS
+AppleSprite dta $00,$00,$60,$F0,$F0,$F0,$F0,$60
+LeafSprite  dta $20,$E0,$00,$00,$00,$00,$00,$00
+
 ; bity vstupu -> smer (poradi bitu UP, DOWN, LEFT, RIGHT)
 BitTab  .byte IN_UP,IN_DOWN,IN_LEFT,IN_RIGHT
 BitDir  .byte DIR_UP,DIR_DOWN,DIR_LEFT,DIR_RIGHT
@@ -238,7 +256,9 @@ txtNoPause .byte "        ",$FF
 txtAb1    .byte "SNAKE FOR ATARI XL/XE",$FF
 txtAb2    .byte "MADS ASSEMBLER, 2025",$FF
 txtAb3    .byte "AUTHOR: PETR SKALOUD (BYPS)",$FF
-txtAb4    .byte "EAT APPLES (",CH_APPLE,"), AVOID WALLS AND",$FF
+txtAb4    .byte "EAT APPLES ",CH_APPLE,", AVOID WALLS AND",$FF
+AB_AX   = 4+11             ; pozice jablka v txtAb4
+AB_AY   = 14
 txtAb5    .byte "YOUR OWN TAIL. P = PAUSE, ESC = MENU.",$FF
 
 ; =====================================================================
@@ -258,6 +278,7 @@ start
         lda #3
         sta SKCTL
         jsr InitFont
+        jsr InitPMG
         lda #<Vbi
         sta VVBLKI
         lda #>Vbi
@@ -333,7 +354,13 @@ About
         PRINT 9,6,txtAb1
         PRINT 10,8,txtAb2
         PRINT 6,10,txtAb3
-        PRINT 4,14,txtAb4
+        PRINT 4,AB_AY,txtAb4
+        lda #AB_AX
+        sta TmpX
+        lda #AB_AY
+        sta TmpY
+        jsr SetPos
+        jsr AppleShow
         PRINT 3,16,txtAb5
         PRINT 10,20,txtPress
         ; dekorace: had (7 znaku) v levem hornim rohu, hlava mrka
@@ -702,9 +729,52 @@ PA_y    lda RANDOM
         jsr SetPos
         lda (ScrPtr),y
         bne PA_x                ; obsazeno
+        jmp AppleShow
+
+; zobrazi jablko na (TmpX, TmpY): znak (ScrPtr uz nastaven SetPos) + sprite
+AppleShow
+        jsr AppleHide
         lda #CH_APPLE
         sta (ScrPtr),y
+        lda TmpX
+        asl
+        asl
+        clc
+        adc #48
+        sta AppleHpos
+        lda TmpY
+        asl
+        asl
+        asl
+        clc
+        adc #PM_Y0
+        sta ApplePmY
+        tax
+        ldy #0
+AS_l    lda AppleSprite,y
+        sta P0DATA,x
+        lda LeafSprite,y
+        sta P1DATA,x
+        inx
+        iny
+        cpy #8
+        bne AS_l
         rts
+
+; schova sprite jablka (znak maze volajici)
+AppleHide
+        ldx ApplePmY
+        beq AH_end
+        lda #0
+        ldy #8
+AH_l    sta P0DATA,x
+        sta P1DATA,x
+        inx
+        dey
+        bne AH_l
+        sta ApplePmY
+        sta AppleHpos
+AH_end  rts
 
 ; radek 0: SCORE nnn   LENGTH nnn
 DrawStatus
@@ -832,6 +902,7 @@ WF_l    cmp FrameCnt
 ;  Obrazovka / tisk
 ; =====================================================================
 ClearScreen
+        jsr AppleHide
         lda #CH_SPACE
         ldx #0
 CS_l    sta SCREEN,x
@@ -962,6 +1033,18 @@ IF_g    lda SnakeGlyphs,x
         bpl IF_g
         rts
 
+; vynuluje data hracu 0 a 1 (jablko: telo + listek)
+InitPMG
+        lda #0
+        sta ApplePmY
+        sta AppleHpos
+        tax
+IP_l    sta P0DATA,x
+        sta P1DATA,x
+        inx
+        bne IP_l
+        rts
+
 UseGameDList
         lda #<DList
         sta DlPtr
@@ -979,10 +1062,26 @@ Vbi
         sta DLISTL
         lda DlPtr+1
         sta DLISTH
-        lda #$22
+        lda #$3A                ; DL + player DMA, single-line
         sta DMACTL
         lda #>FONT
         sta CHBASE
+        lda #>PMAREA
+        sta PMBASE
+        lda #2                  ; playeri zapnuti
+        sta GRACTL
+        lda #1                  ; playeri nad playfieldem: pixel textu nad hracem
+        sta PRIOR               ; dostane odstin hrace + jas PF1
+        lda #0
+        sta SIZEP0
+        sta SIZEP0+1
+        lda #COL_APPLE
+        sta COLPM0
+        lda #COL_LEAF
+        sta COLPM0+1
+        lda AppleHpos
+        sta HPOSP0
+        sta HPOSP0+1
         lda #0
         sta COLPF0
         lda #COL_TITLE
