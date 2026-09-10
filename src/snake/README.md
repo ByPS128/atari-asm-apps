@@ -26,7 +26,8 @@ reálném stroji přes loader. Hra nepoužívá OS (vlastní display list, VBI, 
 |----------------------|-----------------|--------------------------------|
 | směr hada            | 4 směry         | šipky (CTRL + `-` `=` `+` `*`) |
 | potvrzení v menu     | FIRE            | RETURN, MEZERNÍK               |
-| zpět do menu         | –               | ESC                            |
+| pauza (V2)           | START           | P                              |
+| zpět do menu         | –               | ESC (i z pauzy)                |
 
 ## Obrazovky a mechaniky
 
@@ -60,6 +61,8 @@ reálném stroji přes loader. Hra nepoužívá OS (vlastní display list, VBI, 
 - **Menu** má vlastní display list: titulek SNAKE v ANTIC módu 6 (dvojnásobná šířka,
   barva `COL_TITLE` přes COLPF3; `$47` místo `$46` v `DListMenu` = mód 7, dvojnásobná
   i výška), položky s mezerou po stranách při inverzi.
+- **Pauza** – P nebo START zastaví hru a ukáže inverzní PAUSED na stavovém řádku; P/START
+  pokračuje, ESC v pauze hru ukončí (stejný význam jako ve hře).
 - **Zvuky jako tabulky** dvojic AUDF/AUDC po snímcích (`SfxEat`, `SfxDenied`, `SfxOver`),
   přehrává je VBI přes `SndPtr`; nový zvuk utne předchozí. Sežrání jablka = šestisnímkový
   „křup" (mix bzučák/tón/šum převzatý z Wormu), denied = klesavý dvoutón (alert) při stisku
