@@ -34,6 +34,18 @@ def snake(m):
     return [(m.mem[x + i], m.mem[y + i]) for i in range(n)]
 
 
+APPLE = 0x6E
+GL = 0x60   # BODY_H, BODY_V, C_LU, C_LD, C_RU, C_RD, HEAD U/R/D/L, TAIL U/R/D/L
+
+
+def cell(m, x, y):
+    return m.mem[0x3000 + y*40 + x]
+
+
+def apples(m):
+    return [(i % 40, i // 40) for i in range(960) if m.mem[0x3000 + i] == APPLE]
+
+
 def check(cond, msg):
     if not cond:
         raise SystemExit('FAIL: ' + msg)
@@ -44,14 +56,17 @@ def main():
     m = machine()
     m.run(5)
     rows = screen(m)
-    check('S N A K E' in rows[4], 'menu: titulek')
+    tb = m.label('TitleBuf')
+    check(bytes(m.mem[tb+7:tb+12]) == bytes(b & 0x3F for b in (0xF3, 0xEE, 0xE1, 0xEB, 0xE5)) or
+          [b & 0x3F for b in m.mem[tb+7:tb+12]] == [0x33, 0x2E, 0x21, 0x2B, 0x25], 'menu: titulek SNAKE v mode 6')
+    check(m.mem[0xD402] | (m.mem[0xD403] << 8) == m.label('DListMenu'), 'menu: display list menu')
     check('START GAME' in rows[10] and 'ABOUT' in rows[12], 'menu: polozky')
-    check(m.mem[0x3000 + 10*40 + 15] & 0x80, 'menu: START GAME je inverzni (vybrany)')
+    check(cell(m, 14, 10) == 0x80 and cell(m, 25, 10) == 0x80, 'menu: START GAME inverzni vcetne mezer po stranach')
     m.screenshot(os.path.join(HERE, 'out_menu.png'))
 
     # dolu -> ABOUT, RETURN -> obrazovka ABOUT, ESC -> zpet
     m.tap(stick='down'); m.run(2)
-    check(m.mem[0x3000 + 12*40 + 17] & 0x80, 'menu: sipka dolu vybere ABOUT')
+    check(cell(m, 16, 12) == 0x80 and cell(m, 22, 12) == 0x80 and cell(m, 14, 10) == 0, 'menu: sipka dolu vybere ABOUT')
     m.tap(key=KEY_RETURN); m.run(3)
     check('SNAKE FOR ATARI XL/XE' in screen(m)[6], 'about: zobrazen')
     m.tap(key=KEY_ESC); m.run(3)
@@ -63,28 +78,45 @@ def main():
     rows = screen(m)
     check('SCORE 000' in rows[0] and 'LENGTH 003' in rows[0], 'hra: stavovy radek')
     check(snake(m) == [(20, 12), (19, 12), (18, 12)], 'hra: vychozi had')
-    check(rows[12][18:21] == 'OO@', 'hra: had vykreslen (OO@)')
-    check(sum(r.count('*') for r in rows) == 1, 'hra: prave jedno jablko')
+    check([cell(m, x, 12) for x in (18, 19, 20)] == [GL+11, GL+0, GL+7], 'hra: had = ocas, telo, hlava vpravo')
+    check(m.mem[0xD402] | (m.mem[0xD403] << 8) == m.label('DList'), 'hra: herni display list')
+    check(cell(m, 0, 1) == 0x51 and cell(m, 39, 23) == 0x43 and cell(m, 5, 1) == 0x52 and cell(m, 0, 5) == 0x7C, 'hra: ramecek z ROM znaku')
+    check(len(apples(m)) == 1, 'hra: prave jedno jablko')
 
     # pohyb doprava: po 10 snimcich krok
     m.run(12)
     check(snake(m)[0] == (21, 12), 'hra: had udelal krok doprava')
-    check(screen(m)[12][17] == ' ', 'hra: ocas smazan')
+    check(cell(m, 18, 12) == 0 and cell(m, 19, 12) == GL+11 and cell(m, 20, 12) == GL+0 and cell(m, 21, 12) == GL+7, 'hra: ocas smazan, novy ocas a telo prekresleny')
 
     # otoceni do sebe (vlevo pri pohybu vpravo) se ignoruje
+    n0 = len(m.pokey_log)
     m.set_stick(left=True); m.run(10); m.set_stick()
     check(var(m, 'SnakeDir') == 1, 'hra: otoceni o 180 stupnu ignorovano')
+    denied = [(a, v) for _, a, v in m.pokey_log[n0:] if a == 1 and v == 0xAA]
+    check(len(denied) == 6, 'hra: zvuk denied zazni jednou (ne kazdy snimek drzeni)')
+    # klavesa: CTRL+'+' (vlevo) pri jizde vpravo -> take denied
+    m.run(2)                      # uvolneni joysticku se musi projevit
+    n0 = len(m.pokey_log)
+    m.tap(key=0x06); m.run(2)
+    check(any(a == 1 and v == 0xAA for _, a, v in m.pokey_log[n0:]), 'hra: denied i z klavesnice')
+    # zatacka: nahoru -> stara hlava se stane rohem, hlava miri nahoru
+    m.set_stick(up=True); m.run(10); m.set_stick()
+    hx, hy = snake(m)[0]
+    check(cell(m, hx, hy) == GL+6 and cell(m, hx, hy+1) == GL+2, 'hra: zatacka = roh LU, hlava nahoru')
+    # U: doleva a dolu -> dva rohy, svisle segmenty v sousednich sloupcich
+    m.set_stick(left=True); m.run(10); m.set_stick()
+    m.set_stick(down=True); m.run(10); m.set_stick()
+    hx, hy = snake(m)[0]
+    check(cell(m, hx, hy) == GL+8 and cell(m, hx, hy-1) == GL+5 and cell(m, hx+1, hy-1) == GL+13, 'hra: pismeno U = roh RD, ocas miri vlevo')
+    m.screenshot(os.path.join(HERE, 'out_u.png'))
 
     # nahoru, pak cesta k jablku: dojdi na sloupec jablka a pak na jeho radek
-    def find_apple():
-        for y, r in enumerate(screen(m)):
-            x = r.find('*')
-            if x >= 0:
-                return x, y
-    ax, ay = find_apple()
+    ax, ay = apples(m)[0]
     hx, hy = snake(m)[0]
     # nejdriv svisle na radek jablka (pokud je jiny), pak vodorovne
     if ay != hy:
+        if (ay < hy) == (var(m, 'SnakeDir') == 2):      # opacny smer -> nejdriv uhnout do strany
+            m.set_stick(left=(ax < hx), right=(ax > hx)); m.run(10); m.set_stick()
         m.set_stick(up=(ay < hy), down=(ay > hy)); m.run(10); m.set_stick()
         while snake(m)[0][1] != ay:
             m.run(10)
@@ -96,8 +128,8 @@ def main():
     m.run(2)
     check(var(m, 'Score') == 1 and var(m, 'SnakeLen') == 4, 'hra: jablko sezrano, delka 4')
     check('SCORE 001' in screen(m)[0] and 'LENGTH 004' in screen(m)[0], 'hra: stav po jablku')
-    check(sum(r.count('*') for r in screen(m)) == 1, 'hra: nove jablko')
-    check(any(a == 1 and v for _, a, v in m.pokey_log), 'hra: zvuk pri sezrani')
+    check(len(apples(m)) == 1, 'hra: nove jablko')
+    check(any(a == 1 and v == 0x84 for _, a, v in m.pokey_log), 'hra: zvuk pri sezrani (krup)')
     m.screenshot(os.path.join(HERE, 'out_game.png'))
 
     # naraz do zdi -> GAME OVER
@@ -113,11 +145,28 @@ def main():
     m.tap(fire=True); m.run(3)
     check('START GAME' in screen(m)[10], 'game over: FIRE vraci do menu')
 
-    # ESC ve hre vraci do menu
+    # pauza: P zastavi hada, P znovu pokracuje, START take, ESC v pauze = menu
     m.tap(fire=True); m.run(3)
     check('SCORE 000' in screen(m)[0], 'hra 2: spustena')
+    m.tap(key=0x0A); m.run(1)
+    pos = snake(m)[0]
+    check('PAUSED' in screen(m)[0] and cell(m, 16, 0) == 0x80, 'pauza: napis PAUSED inverzne')
+    m.run(30)
+    check(snake(m)[0] == pos, 'pauza: had stoji')
+    m.tap(key=0x0A); m.run(1)
+    check('PAUSED' not in screen(m)[0], 'pauza: P znovu = pokracovani, napis smazan')
+    m.run(30)
+    check(snake(m)[0] != pos, 'pauza: had zase jede')
+    m.tap(consol='start'); m.run(1)
+    check('PAUSED' in screen(m)[0], 'pauza: START pauzu zapne')
     m.tap(key=KEY_ESC); m.run(3)
-    check('START GAME' in screen(m)[10], 'hra 2: ESC vraci do menu')
+    check('START GAME' in screen(m)[10], 'pauza: ESC v pauze vraci do menu')
+
+    # ESC ve hre vraci do menu
+    m.tap(fire=True); m.run(3)
+    check('SCORE 000' in screen(m)[0], 'hra 3: spustena')
+    m.tap(key=KEY_ESC); m.run(3)
+    check('START GAME' in screen(m)[10], 'hra 3: ESC vraci do menu')
     print('ALL OK, frames', m.frame)
 
 

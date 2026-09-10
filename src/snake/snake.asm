@@ -1,6 +1,13 @@
 ; =====================================================================
 ;  SNAKE pro Atari XL/XE (6502, MADS assembler)
 ;
+;  - Vlastni znakova sada: had z glyfu 6 px silnych, ktere navazuji
+;    v zatackach (snake_font.inc generuje gen_font.py), ohrada z ramecovych
+;    znaku ROM, titulek v ANTIC mode 6 (menu ma vlastni display list).
+;  - Zvuky jako tabulky AUDF/AUDC po snimcich prehravane ve VBI (krup pri
+;    sezrani, alert pri zakazane otocce, ton pri game over).
+;  - Pauza P / START, ESC = konec hry.
+;
 ;  - Menu (START GAME / ABOUT), hra, obrazovka GAME OVER.
 ;  - Graphics 0 (ANTIC mode 2) s vlastnim display listem, vlastni VBI
 ;    (citac snimku, barvy, zvuk). OS shadow registry se nepouzivaji,
@@ -12,7 +19,7 @@
 ;  - Rychlost roste s kazdym tretim sezranym jablkem (SPEED_STEP).
 ;
 ;  Ovladani: joystick / sipky (CTRL + - = + *), FIRE / RETURN / MEZERNIK
-;            = potvrzeni v menu, ESC = zpet do menu.
+;            = potvrzeni v menu, P / START = pauza, ESC = zpet do menu.
 ;
 ;  Build:  mads snake.asm -o:snake.xex -t:snake.lab   (viz make.bat)
 ;  Test:   python test_snake.py                        (harness emu.py)
@@ -30,10 +37,13 @@ VVBLKI   = $0222
 XITVBV   = $E462
 
 TRIG0    = $D010
+COLPF0   = $D016
 COLPF1   = $D017
 COLPF2   = $D018
+COLPF3   = $D019
 COLBK    = $D01A
 GRACTL   = $D01D
+CONSOL   = $D01F
 
 PORTA    = $D300
 AUDF1    = $D200
@@ -48,6 +58,8 @@ SKCTL    = $D20F
 ;  Konstanty
 ; ---------------------------------------------------------------------
 SCREEN   = $3000           ; 40x24 = 960 bajtu videopameti
+FONT     = $3400           ; kopie ROM fontu + glyfy hada (1 KB, zarovnano)
+ROMFONT  = $E000
 SCREEN_W = 40
 SCREEN_H = 24
 
@@ -64,10 +76,15 @@ SPEED_STEP  = 3            ; kazde N-te jablko zrychli o 1 snimek
 
 ; znaky ve videopameti (interni kody!)
 CH_SPACE = $00
-CH_WALL  = $80             ; inverzni mezera = plny blok
-CH_BODY  = $2F             ; 'O'
-CH_HEAD  = $20             ; '@'
-CH_APPLE = $0A             ; '*'
+CH_APPLE = $6E             ; glyf jablka (snake_font.inc)
+GLYPH0   = $60             ; prvni glyf hada v znakove sade
+; ramecek z ROM znaku (ATASCII CTRL-Q/E/Z/C/R a '|')
+CH_TL    = $51             ; rohy
+CH_TR    = $45
+CH_BL    = $5A
+CH_BR    = $43
+CH_HOR   = $52
+CH_VER   = $7C
 
 ; bity vstupu (InRaw / InNew)
 IN_UP    = $01
@@ -76,6 +93,7 @@ IN_LEFT  = $04
 IN_RIGHT = $08
 IN_FIRE  = $10
 IN_ESC   = $20
+IN_PAUSE = $40             ; P nebo START
 
 ; scan kody klaves (KBCODE & $3F)
 KEY_MINUS  = $0E           ; CTRL+-  = sipka nahoru
@@ -85,6 +103,7 @@ KEY_STAR   = $07           ; CTRL+*  = sipka vpravo
 KEY_RETURN = $0C
 KEY_SPACE  = $21
 KEY_ESC    = $1C
+KEY_P      = $0A
 
 ; smery
 DIR_UP    = 0
@@ -97,6 +116,7 @@ COL_MENU  = $94
 COL_GAME  = $B2
 COL_OVER  = $34
 COL_TEXT  = $0E            ; jas textu (COLPF1)
+COL_TITLE = $2A            ; titulek SNAKE v mode 6 (COLPF3)
 
 ; ---------------------------------------------------------------------
 ;  Nulta stranka
@@ -106,6 +126,7 @@ TxtPtr   = $82             ; ukazatel na text (2 bajty)
 TmpX     = $84
 TmpY     = $85
 InvMask  = $86             ; $00 / $80 - tisk normalne / inverzne
+SndPtr   = $87             ; ukazatel na prehravany zvuk (2 bajty, hi = 0 -> ticho)
 
 ; ---------------------------------------------------------------------
 ;  Makro: tisk textu na (x, y); inverzi ridi InvMask
@@ -131,6 +152,22 @@ DList   dta $70,$70,$70
         :23 dta $02
         dta $41,a(DList)
 
+; menu: titulek v ANTIC mode 6 (20 znaku dvojnasobne sirky; $47 = mode 7,
+; navic dvojnasobna vyska), pak text od radku 4 videopameti
+DListMenu
+        dta $70,$70,$70,$70
+        dta $46,a(TitleBuf)
+        dta $70,$70
+        dta $42,a(SCREEN+4*40)
+        :19 dta $02
+        dta $41,a(DListMenu)
+
+; "SNAKE" uprostred 20 znaku; bity 6-7 = $C0 -> barva COLPF3
+TitleBuf
+        :7 dta 0
+        dta $33+$C0,$2E+$C0,$21+$C0,$2B+$C0,$25+$C0
+        :8 dta 0
+
 ; ---------------------------------------------------------------------
 ;  Promenne
 ; ---------------------------------------------------------------------
@@ -139,7 +176,7 @@ InRaw     .byte 0          ; aktualne drzene vstupy
 InPrev    .byte 0
 InNew     .byte 0          ; vstupy nove stisknute od minuleho snimku
 BgColor   .byte COL_MENU   ; COLPF2 nastavovane ve VBI
-SndTimer  .byte 0          ; zbyvajici snimky zvuku
+DlPtr     .word DListMenu  ; display list nastavovany ve VBI
 
 Selection .byte 0          ; menu: 0 = START GAME, 1 = ABOUT
 Score     .byte 0
@@ -150,11 +187,14 @@ Delay     .byte 0          ; snimku mezi kroky
 Timer     .byte 0
 TailX     .byte 0
 TailY     .byte 0
+TailDir   .byte 0
 Dead      .byte 0
 Idx       .byte 0          ; pomocny index
+Idx2      .byte 0
 
 SnakeX    .ds MAX_LEN      ; [0] = hlava
 SnakeY    .ds MAX_LEN
+SegDir    .ds MAX_LEN      ; smer od segmentu k predchozimu (blize hlave)
 
 ; adresy radku videopameti
 RowLo   :24 dta <(SCREEN+#*40)
@@ -164,22 +204,40 @@ RowHi   :24 dta >(SCREEN+#*40)
 DirDX   .byte 0,1,0,$FF
 DirDY   .byte $FF,0,1,0
 
+; glyfy hada podle smeru (UP, RIGHT, DOWN, LEFT)
+HeadTab .byte GLYPH0+6,GLYPH0+7,GLYPH0+8,GLYPH0+9
+TailTab .byte GLYPH0+10,GLYPH0+11,GLYPH0+12,GLYPH0+13
+; telo podle smeru prijezdu (in) a odjezdu (out): BodyTab[in*4+out]
+; rovne = BODY_V/BODY_H, zatacka = roh spojujici vstupni a vystupni stranu
+BodyTab .byte GLYPH0+1,GLYPH0+5,GLYPH0+1,GLYPH0+3   ; in UP:    -,RD,-,LD
+        .byte GLYPH0+2,GLYPH0+0,GLYPH0+3,GLYPH0+0   ; in RIGHT: LU,-,LD,-
+        .byte GLYPH0+1,GLYPH0+4,GLYPH0+1,GLYPH0+2   ; in DOWN:  -,RU,-,LU
+        .byte GLYPH0+4,GLYPH0+0,GLYPH0+5,GLYPH0+0   ; in LEFT:  RU,-,RD,-
+
+; bity vstupu -> smer (poradi bitu UP, DOWN, LEFT, RIGHT)
+BitTab  .byte IN_UP,IN_DOWN,IN_LEFT,IN_RIGHT
+BitDir  .byte DIR_UP,DIR_DOWN,DIR_LEFT,DIR_RIGHT
+
+        icl 'snake_font.inc'
+
 ; ---------------------------------------------------------------------
 ;  Texty (konec $FF). MADS: text v "..." = interni kody, v '...' = ATASCII
 ; ---------------------------------------------------------------------
-txtTitle  .byte "S N A K E",$FF
-txtStart  .byte "START GAME",$FF
-txtAbout  .byte "ABOUT",$FF
+txtSub    .byte "FOR ATARI XL/XE",$FF
+txtStart  .byte " START GAME ",$FF
+txtAbout  .byte " ABOUT ",$FF
 txtHint   .byte "JOYSTICK OR ARROWS, FIRE = SELECT",$FF
 txtScore  .byte "SCORE",$FF
 txtLength .byte "LENGTH",$FF
 txtOver   .byte " GAME OVER ",$FF
 txtPress  .byte "PRESS FIRE OR RETURN",$FF
+txtPause  .byte " PAUSED ",$FF
+txtNoPause .byte "        ",$FF
 txtAb1    .byte "SNAKE FOR ATARI XL/XE",$FF
 txtAb2    .byte "MADS ASSEMBLER, 2025",$FF
 txtAb3    .byte "AUTHOR: PETR SKALOUD (BYPS)",$FF
 txtAb4    .byte "EAT APPLES (*), AVOID WALLS AND",$FF
-txtAb5    .byte "YOUR OWN TAIL. ESC = BACK TO MENU.",$FF
+txtAb5    .byte "YOUR OWN TAIL. P = PAUSE, ESC = MENU.",$FF
 
 ; =====================================================================
 ;  START
@@ -192,10 +250,12 @@ start
         sta GRACTL
         sta AUDCTL
         sta AUDC1
-        sta SndTimer
+        sta SndPtr
+        sta SndPtr+1
         sta InPrev
         lda #3
         sta SKCTL
+        jsr InitFont
         lda #<Vbi
         sta VVBLKI
         lda #>Vbi
@@ -221,7 +281,11 @@ Menu
         lda #COL_MENU
         sta BgColor
         jsr ClearScreen
-        PRINT 15,4,txtTitle
+        lda #<DListMenu
+        sta DlPtr
+        lda #>DListMenu
+        sta DlPtr+1
+        PRINT 12,6,txtSub
         PRINT 3,20,txtHint
         jsr WaitRelease
 Menu_l  jsr DrawMenuItems
@@ -249,11 +313,11 @@ DrawMenuItems
         lda #$80
 DMI_0   eor #$80                ; START GAME inverzne, kdyz Selection = 0
         sta InvMask
-        PRINT 15,10,txtStart
+        PRINT 14,10,txtStart
         lda InvMask
         eor #$80                ; ABOUT inverzne v opacnem pripade
         sta InvMask
-        PRINT 17,12,txtAbout
+        PRINT 16,12,txtAbout
         lda #0
         sta InvMask
         rts
@@ -263,6 +327,7 @@ DMI_0   eor #$80                ; START GAME inverzne, kdyz Selection = 0
 ; =====================================================================
 About
         jsr ClearScreen
+        jsr UseGameDList
         PRINT 9,6,txtAb1
         PRINT 10,8,txtAb2
         PRINT 6,10,txtAb3
@@ -288,6 +353,7 @@ Game
         lda #COL_GAME
         sta BgColor
         jsr ClearScreen
+        jsr UseGameDList
         jsr DrawBorder
         lda #0
         sta Score
@@ -310,6 +376,8 @@ G_init  sty TmpX
         sta SnakeX,y
         lda #12
         sta SnakeY,y
+        lda #DIR_RIGHT
+        sta SegDir,y
         iny
         cpy SnakeLen
         bne G_init
@@ -323,7 +391,12 @@ G_loop  jsr WaitFrame
         lda InNew
         and #IN_ESC
         bne G_esc
-        jsr ChooseDir
+        lda InNew
+        and #IN_PAUSE
+        beq G_nop
+        jsr Pause
+        bne G_esc               ; ESC v pauze = konec hry
+G_nop   jsr ChooseDir
         dec Timer
         bne G_loop
         lda Delay
@@ -334,36 +407,50 @@ G_loop  jsr WaitFrame
         jmp GameOver
 G_esc   rts
 
+; pauza: PAUSED na stavovem radku; P/START = pokracovat (vraci Z=1),
+; ESC = ukoncit hru (vraci Z=0)
+Pause
+        lda #$80
+        sta InvMask
+        PRINT 16,0,txtPause
+        lda #0
+        sta InvMask
+P_l     jsr WaitFrame
+        jsr ReadInputs
+        lda InNew
+        and #IN_ESC
+        bne P_end
+        lda InNew
+        and #IN_PAUSE
+        beq P_l
+        PRINT 16,0,txtNoPause
+        lda #0
+P_end   rts
+
 ; z drzenych vstupu vybere novy smer; zakaze otoceni o 180 stupnu
 ; (kontroluje se vuci smeru POSLEDNIHO kroku, ne vuci NextDir, aby
 ; dve rychle klavesy v jednom kroku nemohly hada otocit do sebe)
 ChooseDir
-        lda InRaw
-        and #IN_UP
-        beq CD_1
-        lda #DIR_UP
-        jmp CD_set
-CD_1    lda InRaw
-        and #IN_DOWN
-        beq CD_2
-        lda #DIR_DOWN
-        jmp CD_set
-CD_2    lda InRaw
-        and #IN_LEFT
-        beq CD_3
-        lda #DIR_LEFT
-        jmp CD_set
-CD_3    lda InRaw
-        and #IN_RIGHT
-        beq CD_end
-        lda #DIR_RIGHT
-CD_set  sta TmpX
+        ldx #3
+CD_l    lda InRaw
+        and BitTab,x
+        bne CD_hit
+        dex
+        bpl CD_l
+        rts
+CD_hit  sta Idx                 ; bit stisknuteho smeru
+        lda BitDir,x
+        sta TmpX
         clc
         adc #2
         and #3                  ; opacny smer
         cmp SnakeDir
+        bne CD_ok
+        lda InNew               ; zakazana otocka: zvuk jen pri novem stisku
+        and Idx
         beq CD_end
-        lda TmpX
+        jmp SoundDenied
+CD_ok   lda TmpX
         sta NextDir
 CD_end  rts
 
@@ -378,6 +465,8 @@ Step
         sta TailX
         lda SnakeY,y
         sta TailY
+        lda SegDir,y
+        sta TailDir
         ; posun segmentu od ocasu k hlave: S[i] = S[i-1]
 St_sh   cpy #0
         beq St_head
@@ -385,18 +474,27 @@ St_sh   cpy #0
         sta SnakeX,y
         lda SnakeY-1,y
         sta SnakeY,y
+        lda SegDir-1,y
+        sta SegDir,y
         dey
         jmp St_sh
 St_head
-        ; stara hlava (ted uz S[1]) se prekresli na telo
+        lda SnakeDir
+        sta SegDir              ; hlava
+        ; stara hlava (ted uz S[1]) se prekresli na telo: rovne nebo roh
         lda SnakeX+1
         sta TmpX
         lda SnakeY+1
         sta TmpY
         jsr SetPos
-        lda #CH_BODY
+        lda SegDir+1            ; smer prijezdu
+        asl
+        asl
+        ora SnakeDir            ; smer odjezdu
+        tax
+        lda BodyTab,x
         sta (ScrPtr),y
-        ; smaz ocas
+        ; smaz ocas a novy ocas prekresli na spicku
         lda TailX
         sta TmpX
         lda TailY
@@ -404,6 +502,7 @@ St_head
         jsr SetPos
         lda #CH_SPACE
         sta (ScrPtr),y
+        jsr DrawTail
         ; nova hlava
         ldx SnakeDir
         lda SnakeX
@@ -442,13 +541,9 @@ St_e1   lda SnakeLen
         sta SnakeX,y
         lda TailY
         sta SnakeY,y
-        lda TailX
-        sta TmpX
-        lda TailY
-        sta TmpY
-        jsr SetPos              ; ocas vratit na obrazovku
-        lda #CH_BODY
-        sta (ScrPtr),y
+        lda TailDir
+        sta SegDir,y
+        jsr DrawTail            ; ocas vratit na obrazovku
 St_e2   jsr SpeedUp
         jsr SoundEat
         jsr PlaceApple
@@ -458,7 +553,22 @@ St_e2   jsr SpeedUp
         lda SnakeY
         sta TmpY
         jsr SetPos
-St_draw lda #CH_HEAD
+St_draw ldx SnakeDir
+        lda HeadTab,x
+        sta (ScrPtr),y
+        rts
+
+; nakresli spicku ocasu na posledni segment (glyf podle jeho smeru)
+DrawTail
+        ldy SnakeLen
+        dey
+        lda SnakeX,y
+        sta TmpX
+        lda SnakeY,y
+        sta TmpY
+        ldx SegDir-1,y          ; smer k dalsimu segmentu (blize hlave)
+        jsr SetPos
+        lda TailTab,x
         sta (ScrPtr),y
         rts
 
@@ -487,17 +597,28 @@ DSF_l   ldy Idx
         sta TmpX
         lda SnakeY,y
         sta TmpY
+        ldx SegDir,y
         jsr SetPos              ; Y = 0
-        lda #CH_BODY
-        ldx Idx
+        lda Idx
         bne DSF_1
-        lda #CH_HEAD
-DSF_1   sta (ScrPtr),y
+        lda HeadTab,x           ; hlava
+        jmp DSF_put
+DSF_1   ldy Idx
+        lda SegDir-1,y          ; telo: in = SegDir[i], out = SegDir[i-1]
+        sta Idx2
+        txa
+        asl
+        asl
+        ora Idx2
+        tax
+        lda BodyTab,x
+        ldy #0
+DSF_put sta (ScrPtr),y
         inc Idx
         lda Idx
         cmp SnakeLen
         bne DSF_l
-        rts
+        jmp DrawTail
 
 ; nahodne umisti jablko na volne policko
 PlaceApple
@@ -539,18 +660,26 @@ DrawStatus
 
 ; ohrada: radek 1 a 23 plny, sloupce 0 a 39 na radcich 2-22
 DrawBorder
-        ldy #SCREEN_W-1
-        lda #CH_WALL
+        ldy #SCREEN_W-2
+        lda #CH_HOR
 DB_1    sta SCREEN+1*40,y
         sta SCREEN+23*40,y
         dey
-        bpl DB_1
+        bne DB_1
+        lda #CH_TL
+        sta SCREEN+1*40
+        lda #CH_TR
+        sta SCREEN+1*40+39
+        lda #CH_BL
+        sta SCREEN+23*40
+        lda #CH_BR
+        sta SCREEN+23*40+39
         lda #FIELD_Y0
         sta TmpY
 DB_2    lda #0
         sta TmpX
         jsr SetPos
-        lda #CH_WALL
+        lda #CH_VER
         sta (ScrPtr),y
         ldy #SCREEN_W-1
         sta (ScrPtr),y
@@ -603,7 +732,13 @@ RI_kl   cmp KeyMapCode,x
 RI_kf   tya
         ora KeyMapBit,x
         tay
-RI_2    sty InRaw
+RI_2    lda CONSOL
+        and #1                  ; START (0 = stisknuto)
+        bne RI_3
+        tya
+        ora #IN_PAUSE
+        tay
+RI_3    sty InRaw
         lda InPrev
         eor #$FF
         and InRaw
@@ -612,9 +747,9 @@ RI_2    sty InRaw
         sta InPrev
         rts
 
-KeyMapCode dta KEY_MINUS,KEY_EQUAL,KEY_PLUS,KEY_STAR,KEY_RETURN,KEY_SPACE,KEY_ESC
-KeyMapBit  dta IN_UP,IN_DOWN,IN_LEFT,IN_RIGHT,IN_FIRE,IN_FIRE,IN_ESC
-KEYMAPLEN  = 7
+KeyMapCode dta KEY_MINUS,KEY_EQUAL,KEY_PLUS,KEY_STAR,KEY_RETURN,KEY_SPACE,KEY_ESC,KEY_P
+KeyMapBit  dta IN_UP,IN_DOWN,IN_LEFT,IN_RIGHT,IN_FIRE,IN_FIRE,IN_ESC,IN_PAUSE
+KEYMAPLEN  = 8
 
 ; ceka, az jsou vsechny vstupy v klidu
 WaitRelease
@@ -708,24 +843,67 @@ PutDigit
         rts
 
 ; =====================================================================
-;  Zvuk (odpocitava VBI)
+;  Zvuk: tabulky dvojic AUDF1,AUDC1 po snimcich, konec $FF; prehrava VBI
 ; =====================================================================
-SoundEat
-        lda #$30
-        sta AUDF1
-        lda #$A6
-        sta AUDC1
-        lda #4
-        sta SndTimer
+; spusti zvuk (A = lo, X = hi adresy tabulky); novy zvuk utne predchozi
+PlaySound
+        sta SndPtr
+        stx SndPtr+1
         rts
 
-SoundOver
-        lda #$F0
-        sta AUDF1
-        lda #$A8
-        sta AUDC1
-        lda #30
-        sta SndTimer
+SoundEat                        ; krup - mix bzucak/ton/sum (podle Worm)
+        lda #<SfxEat
+        ldx #>SfxEat
+        bne PlaySound
+SoundDenied                     ; alert - klesavy dvouton
+        lda #<SfxDenied
+        ldx #>SfxDenied
+        bne PlaySound
+SoundOver                       ; hluboky ton
+        lda #<SfxOver
+        ldx #>SfxOver
+        bne PlaySound
+
+SfxEat    dta $5F,$44, $5C,$A6, $57,$84, $5C,$A6, $5C,$A4, $44,$0E, $FF
+SfxDenied dta $50,$AA, $50,$AA, $50,$AA, $78,$AA, $78,$AA, $78,$AA, $78,$A6, $FF
+SfxOver   :30 dta $F0,$A8
+          dta $FF
+
+; =====================================================================
+;  Znakova sada, display listy
+; =====================================================================
+; zkopiruje ROM font do RAM a prepise glyfy hada od GLYPH0
+InitFont
+        lda #<ROMFONT
+        sta TxtPtr
+        lda #>ROMFONT
+        sta TxtPtr+1
+        lda #<FONT
+        sta ScrPtr
+        lda #>FONT
+        sta ScrPtr+1
+        ldx #4                  ; 4 stranky
+IF_p    ldy #0
+IF_l    lda (TxtPtr),y
+        sta (ScrPtr),y
+        iny
+        bne IF_l
+        inc TxtPtr+1
+        inc ScrPtr+1
+        dex
+        bne IF_p
+        ldx #SNAKE_GLYPHS*8-1
+IF_g    lda SnakeGlyphs,x
+        sta FONT+GLYPH0*8,x
+        dex
+        bpl IF_g
+        rts
+
+UseGameDList
+        lda #<DList
+        sta DlPtr
+        lda #>DList
+        sta DlPtr+1
         rts
 
 ; =====================================================================
@@ -734,26 +912,45 @@ SoundOver
 Vbi
         cld
         inc FrameCnt
-        lda #<DList
+        lda DlPtr
         sta DLISTL
-        lda #>DList
+        lda DlPtr+1
         sta DLISTH
         lda #$22
         sta DMACTL
-        lda #$E0
+        lda #>FONT
         sta CHBASE
         lda #0
-        sta COLBK
+        sta COLPF0
+        lda #COL_TITLE
+        sta COLPF3
+        lda BgColor
+        sta COLBK               ; okraj i pozadi titulku (mode 6) = pozadi textu
         lda BgColor
         sta COLPF2
         lda #COL_TEXT
         sta COLPF1
-        lda SndTimer
+        ; zvuk: dalsi dvojice z tabulky
+        lda SndPtr+1
         beq V_end
-        dec SndTimer
-        bne V_end
-        lda #0
+        ldy #0
+        lda (SndPtr),y
+        cmp #$FF
+        beq V_soff
+        sta AUDF1
+        iny
+        lda (SndPtr),y
         sta AUDC1
+        lda SndPtr
+        clc
+        adc #2
+        sta SndPtr
+        bcc V_end
+        inc SndPtr+1
+        bne V_end
+V_soff  lda #0
+        sta AUDC1
+        sta SndPtr+1
 V_end   jmp XITVBV
 
         run start

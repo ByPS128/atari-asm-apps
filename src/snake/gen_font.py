@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generuje snake_font.inc - vlastni glyfy hada pro snake_V2.asm (interni kody $60-$6E).
+"""Generuje snake_font.inc - vlastni glyfy hada pro snake.asm (interni kody $60-$6E).
 
 Telo je 6 px silne s 1px okrajem, takze sousedni rovnobezne segmenty
 (napr. pismeno U) nesplyvaji. Rotace/zrcadleni se dopocitavaji z jednoho vzoru.
