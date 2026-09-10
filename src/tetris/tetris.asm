@@ -286,6 +286,9 @@ FlashCnt  .byte 0
 FlashPhase .byte 0
 DropCells .byte 0
 LinesNow  .byte 0
+ScoreRem  .byte 0,0        ; zbyvajici bonus za rady v jednotkach 10 bodu (binarne, lo/hi)
+ScoreN    .byte 0,0        ; celkovy bonus v jednotkach (N)
+ScoreAcc  .byte 0,0        ; akumulator: kazdy snimek += N, za kazdych FLASH_LEN jedna jednotka
 SeqCnt    .byte 0          ; citac snimku pro blokujici sekvence (level done, game over)
 SeqRow    .byte 0
 
@@ -473,8 +476,8 @@ FillerA dta c'#.##.###.#'
 FillerB dta c'##.#.#.##.'
 
 ; skore za 1..4 rad (BCD, x level)
-LineScLo  .byte 0,$40,$00,$00,$00
-LineScHi  .byte 0,$00,$01,$03,$12
+UnitTab   .byte 0,4,10,30,120       ; body za 1-4 rady / 10 (x level), pricitaji se behem blikani
+FLASH_LEN = 24                      ; delka blikani ve snimcich
 
 Rainbow   .byte $1A,$1C,$2A,$2C,$3A,$3C,$4A,$4C,$5A,$5C,$6A,$6C,$7A,$7C,$8A,$8C
           .byte $9A,$9C,$AA,$AC,$BA,$BC,$CA,$CC,$DA,$DC,$EA,$EC,$FA,$FC,$0A,$0E
@@ -1504,9 +1507,11 @@ StClear
         lsr
         and #1
         sta FlashPhase
+        jsr ScoreTick               ; skore roste behem blikani
         lda FlashCnt
-        cmp #24
+        cmp #FLASH_LEN
         bcc SC_done
+        jsr ScoreFlush              ; pojistka: co zbylo, pricist naraz
         jsr RemoveFullRows
         jsr ScoreLines
         jsr FindFull
@@ -1514,6 +1519,7 @@ StClear
         beq SC_nomore
         lda #0
         sta FlashCnt
+        jsr StartClearScore
         SFX SFX_LINE
         rts
 SC_nomore
@@ -1739,6 +1745,7 @@ LockPiece
         sta FlashCnt
         lda #1
         sta FlashPhase
+        jsr StartClearScore
         lda FullCnt
         cmp #4
         beq LP_tetris
@@ -1842,17 +1849,103 @@ ScoreLines
         adc #0
         sta Lines+1
         cld
-        ; Score += LineSc[FullCnt] * Level
-        ldx FullCnt
-        lda LineScLo,x
-        sta tmp
-        lda LineScHi,x
-        sta tmp2
-        ldx Level
-SL_mul  jsr AddScore
-        dex
-        bne SL_mul
         rts
+
+; ---------------------------------------------------------------------
+;  Bonus za rady se pricita postupne behem blikani (FLASH_LEN snimku):
+;  N = UnitTab[FullCnt] * Level jednotek po 10 bodech (binarne, max 1800).
+;  Rozlozeni bez deleni (Bresenham): kazdy snimek ScoreAcc += N a za kazdych
+;  FLASH_LEN v akumulatoru se pricte 1 jednotka -> po FLASH_LEN snimcich presne N,
+;  rovnomerne i pro male bonusy (40 bodu = 4 dily po 6 snimcich).
+; ---------------------------------------------------------------------
+StartClearScore
+        lda #0
+        sta ScoreN
+        sta ScoreN+1
+        sta ScoreAcc
+        sta ScoreAcc+1
+        ldx FullCnt
+        lda UnitTab,x
+        sta tmp
+        ldx Level
+SCS_m   lda ScoreN                  ; ScoreN += UnitTab (Level krat)
+        clc
+        adc tmp
+        sta ScoreN
+        bcc SCS_1
+        inc ScoreN+1
+SCS_1   dex
+        bne SCS_m
+        lda ScoreN
+        sta ScoreRem
+        lda ScoreN+1
+        sta ScoreRem+1
+        rts
+
+; jeden snimek blikani: ScoreAcc += N, pricist ScoreAcc / FLASH_LEN jednotek
+ScoreTick
+        lda ScoreRem
+        ora ScoreRem+1
+        beq ST_none
+        lda ScoreAcc
+        clc
+        adc ScoreN
+        sta ScoreAcc
+        lda ScoreAcc+1
+        adc ScoreN+1
+        sta ScoreAcc+1
+        ldx #0                      ; X = jednotek ted
+ST_d    lda ScoreAcc
+        sec
+        sbc #FLASH_LEN
+        tay
+        lda ScoreAcc+1
+        sbc #0
+        bcc ST_add
+        sty ScoreAcc
+        sta ScoreAcc+1
+        inx
+        bne ST_d
+ST_add  txa
+        beq ST_none
+        jmp AddUnits
+ST_none rts
+
+; A = pocet jednotek (< 100) -> odecist ze ScoreRem (max do 0) a pricist A*10 ke skore
+AddUnits
+        sta tmp3
+        lda ScoreRem+1
+        bne AU_1
+        lda ScoreRem
+        cmp tmp3
+        bcs AU_1
+        sta tmp3                    ; zbyva mene nez pozadovano
+AU_1    lda ScoreRem
+        sec
+        sbc tmp3
+        sta ScoreRem
+        bcs AU_2
+        dec ScoreRem+1
+AU_2    lda tmp3
+        ldy #0
+        jsr Bin2Dec                 ; tmp2 = desitky, tmp3 = jednotky
+        lda tmp3
+        asl
+        asl
+        asl
+        asl
+        sta tmp                     ; lo bajt: jednotky*10
+        jmp AddScore                ; hi bajt = tmp2 = stovky
+
+; pojistka na konci blikani: pricist vse, co zbylo
+ScoreFlush
+        lda ScoreRem
+        ora ScoreRem+1
+        beq SF_e
+        lda #99
+        jsr AddUnits
+        jmp ScoreFlush
+SF_e    rts
 
 ; Score += tmp/tmp2 (BCD 16 bit)
 AddScore

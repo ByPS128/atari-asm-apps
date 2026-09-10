@@ -42,4 +42,27 @@ m.tap(fire=True); m.run(20)              # MenuSel zustava na HELP
 check('TETRIS - HELP' in m.text_rows(0x6000, 26)[1], 'help: znovu strana 1')
 m.tap(key=0x1C); m.run(10)
 check(m.mem[0xD403] != 0x70, 'help: ESC ze strany 1 rovnou do menu')
+
+# skore roste postupne behem blikani smazane rady a na konci sedi presne
+def score(m):
+    b = m.label('Score'); return int('%02x%02x%02x' % (m.mem[b+2], m.mem[b+1], m.mem[b]))
+m = Machine(seed=5); m.load_labels()
+m.run(30); m.tap(fire=True); m.run(20); m.tap(consol='start'); m.run(5); m.run(10)
+check(m.mem[m.label('CurType')] == 2 and m.mem[m.label('CurX')] == 3 and m.mem[m.label('CurRot')] == 0, 'radky: T na x=3 (seed 5)')
+B = m.label('Board')
+for x in range(10):
+    if x not in (3, 4, 5): m.mem[B + 23*10 + x] = 1     # rada 23 plna krome mista pro spodek T
+s0 = score(m); y0 = m.mem[m.label('CurY')]
+m.set_key(0x21); m.run(1); m.set_key(None)                # hard drop, vzorkovat od prvniho snimku
+check(m.mem[m.label('State')] == 2, 'radky: blikani zacalo')
+vals = [score(m)]
+for _ in range(30):
+    m.run(1); vals.append(score(m))
+    if m.mem[m.label('State')] != 2: break
+check(all(b >= a for a, b in zip(vals, vals[1:])), 'radky: skore behem blikani neklesa')
+check(len(set(vals)) == 5, 'radky: 40 bodu = 4 dily po 10 rovnomerne (%d hodnot)' % len(set(vals)))
+steps = [i for i in range(1, len(vals)) if vals[i] != vals[i-1]]
+check(steps == [6, 12, 18, 24], 'radky: dily na snimcich 6/12/18/24 (%s)' % steps)
+drop = 2 * (22 - y0)                                       # hard drop: 2 body za bunku (T dosedne na y=22)
+check(vals[-1] == s0 + drop + 40 * m.mem[m.label('Level')], 'radky: konecne skore = drop + 40 x level (%d)' % vals[-1])
 print('ALL OK')

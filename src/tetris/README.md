@@ -53,7 +53,8 @@ přímé čtení hardwaru), takže funguje s BASICem i bez něj.
   opakují a přibývají výplňové řady).
 - **Mazání řad** – plné řady 3× bliknou a zmizí se zvukem, vše nad nimi sesedne.
 - **Skóre** – 40 / 100 / 300 / 1200 × level za 1–4 řady, +1 za buňku soft dropu,
-  +2 za buňku hard dropu.
+  +2 za buňku hard dropu. Bonus za řady naskakuje postupně během blikání (24 snímků),
+  rozložený rovnoměrně bez dělení (Bresenham po jednotkách 10 bodů), na konci sedí přesně.
 - **Game over** – když nový kus nemá kam spawnout: sestupný zvuk, studna se
   odspodu zaplní, čeká se na FIRE/START.
 - **Zvuky** – POKEY, 4 kanály, jednoduchý sekvencer v VBI (`SoundTick`).
