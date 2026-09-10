@@ -107,6 +107,19 @@ TmpX     = $84
 TmpY     = $85
 InvMask  = $86             ; $00 / $80 - tisk normalne / inverzne
 
+; ---------------------------------------------------------------------
+;  Makro: tisk textu na (x, y); inverzi ridi InvMask
+; ---------------------------------------------------------------------
+        .macro PRINT            ; PRINT x,y,text
+        lda #:1
+        sta TmpX
+        lda #:2
+        sta TmpY
+        lda #<:3
+        ldx #>:3
+        jsr PrintAt
+        .endm
+
 ; =====================================================================
         org $2000
 
@@ -208,20 +221,8 @@ Menu
         lda #COL_MENU
         sta BgColor
         jsr ClearScreen
-        lda #15
-        sta TmpX
-        lda #4
-        sta TmpY
-        lda #<txtTitle
-        ldx #>txtTitle
-        jsr PrintAt
-        lda #3
-        sta TmpX
-        lda #20
-        sta TmpY
-        lda #<txtHint
-        ldx #>txtHint
-        jsr PrintAt
+        PRINT 15,4,txtTitle
+        PRINT 3,20,txtHint
         jsr WaitRelease
 Menu_l  jsr DrawMenuItems
         jsr WaitFrame
@@ -243,32 +244,16 @@ Menu_2  lda InNew
 
 ; vykresli obe polozky, vybrana inverzne
 DrawMenuItems
-        lda #0
-        sta InvMask
-        lda Selection
-        bne DMI_1
+        lda Selection           ; 0 = START GAME, 1 = ABOUT
+        beq DMI_0
         lda #$80
+DMI_0   eor #$80                ; START GAME inverzne, kdyz Selection = 0
         sta InvMask
-DMI_1   lda #15
-        sta TmpX
-        lda #10
-        sta TmpY
-        lda #<txtStart
-        ldx #>txtStart
-        jsr PrintAt
-        lda #0
+        PRINT 15,10,txtStart
+        lda InvMask
+        eor #$80                ; ABOUT inverzne v opacnem pripade
         sta InvMask
-        lda Selection
-        beq DMI_2
-        lda #$80
-        sta InvMask
-DMI_2   lda #17
-        sta TmpX
-        lda #12
-        sta TmpY
-        lda #<txtAbout
-        ldx #>txtAbout
-        jsr PrintAt
+        PRINT 17,12,txtAbout
         lda #0
         sta InvMask
         rts
@@ -278,48 +263,12 @@ DMI_2   lda #17
 ; =====================================================================
 About
         jsr ClearScreen
-        lda #9
-        sta TmpX
-        lda #6
-        sta TmpY
-        lda #<txtAb1
-        ldx #>txtAb1
-        jsr PrintAt
-        lda #10
-        sta TmpX
-        lda #8
-        sta TmpY
-        lda #<txtAb2
-        ldx #>txtAb2
-        jsr PrintAt
-        lda #6
-        sta TmpX
-        lda #10
-        sta TmpY
-        lda #<txtAb3
-        ldx #>txtAb3
-        jsr PrintAt
-        lda #4
-        sta TmpX
-        lda #14
-        sta TmpY
-        lda #<txtAb4
-        ldx #>txtAb4
-        jsr PrintAt
-        lda #3
-        sta TmpX
-        lda #15
-        sta TmpY
-        lda #<txtAb5
-        ldx #>txtAb5
-        jsr PrintAt
-        lda #10
-        sta TmpX
-        lda #20
-        sta TmpY
-        lda #<txtPress
-        ldx #>txtPress
-        jsr PrintAt
+        PRINT 9,6,txtAb1
+        PRINT 10,8,txtAb2
+        PRINT 6,10,txtAb3
+        PRINT 4,14,txtAb4
+        PRINT 3,15,txtAb5
+        PRINT 10,20,txtPress
         jmp WaitConfirm
 
 ; ceka na FIRE / RETURN / MEZERNIK / ESC (nejdriv na uvolneni vseho)
@@ -577,22 +526,12 @@ PA_y    lda RANDOM
 DrawStatus
         lda #0
         sta InvMask
-        lda #1
-        sta TmpX
-        lda #0
-        sta TmpY
-        lda #<txtScore
-        ldx #>txtScore
-        jsr PrintAt
+        PRINT 1,0,txtScore
         lda #7
         sta TmpX
         lda Score
         jsr PrintDec3
-        lda #28
-        sta TmpX
-        lda #<txtLength
-        ldx #>txtLength
-        jsr PrintAt
+        PRINT 28,0,txtLength
         lda #35
         sta TmpX
         lda SnakeLen
@@ -630,22 +569,10 @@ GameOver
         jsr SoundOver
         lda #$80
         sta InvMask
-        lda #14
-        sta TmpX
-        lda #11
-        sta TmpY
-        lda #<txtOver
-        ldx #>txtOver
-        jsr PrintAt
+        PRINT 14,11,txtOver
         lda #0
         sta InvMask
-        lda #10
-        sta TmpX
-        lda #13
-        sta TmpY
-        lda #<txtPress
-        ldx #>txtPress
-        jsr PrintAt
+        PRINT 10,13,txtPress
         jmp WaitConfirm
 
 ; =====================================================================
