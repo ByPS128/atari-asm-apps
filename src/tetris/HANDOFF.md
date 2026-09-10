@@ -47,10 +47,12 @@ Cílový stav: přenést layout z `design3.asm` do `tetris.asm`, přidat nový m
   - **P2 double (`SIZE 1`) = aktivní kostka, P3 double = kostka v NEXT** (od 10.9.2026,
     vzor `design4.asm`; nahradilo podbarvenou studnu). 1 bit hráče = půl znaku, 8 bitů =
     4 buňky (`CellMask` $C0/$30/$0C/$03 pro dx 0..3). `UpdatePiecePM` (každý snímek
-    z `RenderGame`) smaže 32 scanlinů od `PcPrevRow`, a je-li `State = ST_FALL`, vyplní
-    data podle `PieceTab` (řádek buňky r = scanline 16+8*r), nastaví `PcHpos =
-    48+4*(WELL_COL+CurX)` a `PcCol = PieceCol[CurType]`. `DrawNext` totéž pro P3
-    (`NxHpos`/`NxCol`; EXPERT → `NxHpos = 0`). VBI jen kopíruje proměnné do registrů.
+    z `RenderGame`) připraví `PcBuf` (32 scanlinů) podle `PieceTab`, `PcRow = 16+8*CurY`
+    ($FF mimo `ST_FALL`), `PcHpos = 48+4*(WELL_COL+CurX)`, `PcCol = PieceCol[CurType]`.
+    `DrawNext` totéž do `NxBuf` (`NxHpos`/`NxCol`; EXPERT → `NxHpos = 0`).
+    **Do paměti hráčů zapisuje výhradně VBI** (smaže `PcPrevRow`, zkopíruje `PcBuf` na
+    `PcRow`, `NxBuf` na pevné řádky NEXT, nastaví HPOS/barvy) – když to dělal hlavní kód,
+    paprsek uprostřed přepisu ukázal spodek kostky šedě, vždy ve výšce NEXT (Altirra).
     Barvy `PieceCol` (I O T S Z J L) = $90 $E0 $60 $B0 $30 $70 $10; jas dává COLPF1,
     takže jsou pastelové a sytě červená není možná. Stěny studny jsou v barvě textu.
     Test: `tools/test_piece_pm.py`.

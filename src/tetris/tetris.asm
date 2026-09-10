@@ -256,7 +256,10 @@ NextDirty .byte 0
 PmOn      .byte 0          ; 1 = PMG podbarveni zapnuto (herni obrazovka)
 PcHpos    .byte 0          ; player 2 (aktivni kostka): HPOS, barva, prvni radek dat ($FF = nic)
 PcCol     .byte 0
-PcPrevRow .byte $FF
+PcPrevRow .byte $FF        ; radek dat P2 aktualne zobrazeny (spravuje VBI)
+PcRow     .byte $FF        ; radek, kam VBI zkopiruje PcBuf ($FF = kostka neni)
+PcBuf     :32 .byte 0      ; 4 radky x 8 scanlinu pripravene hlavnim kodem
+NxBuf     :32 .byte 0      ; totez pro NEXT (pevne radky NEXT_ROW+1..+4)
 NxHpos    .byte 0          ; player 3 (NEXT): HPOS, barva
 NxCol     .byte 0
 RowsInLevel .byte 0        ; smazane rady v aktualnim levelu (binarne)
@@ -2351,40 +2354,29 @@ IP_1    lda #$FF
         sta NxHpos
         lda #$FF
         sta PcPrevRow
+        sta PcRow
         rts
 
 ; ---------------------------------------------------------------------
 ;  Player 2 = aktivni kostka: data hrace podle CurType/CurRot/CurX/CurY.
-;  Radek bunky r zacina na scanline 16+8*r (jako P0/P1); bunka dx -> CellMask.
-;  Vola se kazdy snimek z RenderGame (po DrawBoard), kostka je videt jen v ST_FALL
-;  (stejna podminka jako BuildComp).
+;  Hlavni kod jen pripravi PcBuf (32 scanlinu) + PcRow/PcHpos/PcCol; do pameti
+;  hrace je prepise az VBI (jinak paprsek uprostred prepisu ukaze pul kostky
+;  sede - videno v Altirre). Radek bunky r = scanline 16+8*r; bunka dx -> CellMask.
+;  Vola se kazdy snimek z RenderGame (po DrawBoard), kostka je videt jen v ST_FALL.
 ; ---------------------------------------------------------------------
 UpdatePiecePM
-        ldx PcPrevRow               ; smaz predchozi (4 radky = 32 scanlinu)
-        cpx #$FF
-        beq UP_1
+        ldx #31                     ; buffer vynulovat
         lda #0
-        ldy #32
-UP_e    sta PMAREA+$600,x
-        inx
-        dey
-        bne UP_e
-        lda #$FF
-        sta PcPrevRow
-UP_1    lda State
+UP_e    sta PcBuf,x
+        dex
+        bpl UP_e
+        lda State
         cmp #ST_FALL
         beq UP_2
-        lda #0
-        sta PcHpos
+        lda #$FF
+        sta PcRow
         rts
-UP_2    lda CurY
-        asl
-        asl
-        asl
-        clc
-        adc #16
-        sta PcPrevRow
-        jsr CurToTest
+UP_2    jsr CurToTest
         jsr PieceIndex
         lda #4
         sta tmp4
@@ -2393,9 +2385,7 @@ UP_c    lda PieceTab,x
         asl
         asl
         asl
-        clc
-        adc PcPrevRow
-        sta tmp2                    ; prvni scanline bunky
+        sta tmp2                    ; prvni scanline bunky v bufferu
         lda PieceTab,x
         and #$0F
         stx tmp3
@@ -2404,9 +2394,9 @@ UP_c    lda PieceTab,x
         sta tmp
         ldx tmp2
         ldy #8
-UP_l    lda PMAREA+$600,x
+UP_l    lda PcBuf,x
         ora tmp
-        sta PMAREA+$600,x
+        sta PcBuf,x
         inx
         dey
         bne UP_l
@@ -2425,6 +2415,13 @@ UP_l    lda PMAREA+$600,x
         ldx CurType
         lda PieceCol,x
         sta PcCol
+        lda CurY
+        asl
+        asl
+        asl
+        clc
+        adc #16
+        sta PcRow                   ; VBI zkopiruje PcBuf sem
         rts
 
 RenderGame
@@ -2650,14 +2647,12 @@ DN_cell lda PieceTab,x
         inx
         dec tmp4
         bne DN_cell
-        ; player 3: smaz vnitrek NEXT (radky NEXT_ROW+1..+4) a vykresli bunky
-        ldx #16+8*(NEXT_ROW+1)
-        ldy #32
+        ; player 3: pripravit NxBuf (radky NEXT_ROW+1..+4), do PMG kopiruje VBI
+        ldx #31
         lda #0
-DN_pe   sta PMAREA+$700,x
-        inx
-        dey
-        bne DN_pe
+DN_pe   sta NxBuf,x
+        dex
+        bpl DN_pe
         lda NextType
         asl
         asl
@@ -2670,11 +2665,11 @@ DN_pc   lda PieceTab,x
         :4 lsr
         clc
         adc celly                   ; radek obrazovky
+        sec
+        sbc #NEXT_ROW+1             ; -> 0..3 v bufferu
         asl
         asl
         asl
-        clc
-        adc #16
         sta tmp2
         lda PieceTab,x
         and #$0F
@@ -2684,9 +2679,9 @@ DN_pc   lda PieceTab,x
         sta tmp
         ldx tmp2
         ldy #8
-DN_pl   lda PMAREA+$700,x
+DN_pl   lda NxBuf,x
         ora tmp
-        sta PMAREA+$700,x
+        sta NxBuf,x
         inx
         dey
         bne DN_pl
@@ -3050,8 +3045,9 @@ Vbi
         lda #0
         sta DliCnt
         lda PmOn
-        beq V_pmoff
-        lda #$3E                    ; DL + player/missile DMA, single-line
+        bne V_pmon
+        jmp V_pmoff
+V_pmon  lda #$3E                    ; DL + player/missile DMA, single-line
         sta DMACTL
         lda #>PMAREA
         sta PMBASE
@@ -3071,8 +3067,38 @@ Vbi
         sta HPOSP0
         lda #48+4*(PAN_COL-1)       ; P1 quad: PAN_COL-1 .. +6
         sta HPOSP0+1
+        ; P2: smazat stare radky, zkopirovat PcBuf na PcRow (atomicky ve vblanku)
+        ldx PcPrevRow
+        cpx #$FF
+        beq V_p2n
+        lda #0
+        ldy #32
+V_p2e   sta PMAREA+$600,x
+        inx
+        dey
+        bne V_p2e
+V_p2n   ldx PcRow
+        stx PcPrevRow
+        cpx #$FF
+        beq V_p2h
+        ldy #0
+V_p2c   lda PcBuf,y
+        sta PMAREA+$600,x
+        inx
+        iny
+        cpy #32
+        bne V_p2c
         lda PcHpos                  ; P2 double: aktivni kostka (4 bunky)
-        sta HPOSP0+2
+        bne V_p2s
+V_p2h   lda #0
+V_p2s   sta HPOSP0+2
+        ; P3: NEXT z NxBuf na pevne radky
+        ldx #0
+V_p3c   lda NxBuf,x
+        sta PMAREA+$700+16+8*(NEXT_ROW+1),x
+        inx
+        cpx #32
+        bne V_p3c
         lda NxHpos                  ; P3 double: kostka v NEXT
         sta HPOSP0+3
         lda #3
