@@ -1,0 +1,5 @@
+*.lab
+*.adf
+*.bak
+tools/out*.png
+tools/__pycache__/
