@@ -23,7 +23,7 @@ BODY_H = """
 # roh spojujici LEVOU a DOLNI stranu (had prijel zleva a zatoci dolu, nebo naopak)
 CORNER_LD = """
 ........
-.######.
+#######.
 #######.
 #######.
 #######.

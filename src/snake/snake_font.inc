@@ -2,10 +2,10 @@
 SnakeGlyphs
         .byte $00,$FF,$FF,$FF,$FF,$FF,$FF,$00   ; $60 BODY_H
         .byte $7E,$7E,$7E,$7E,$7E,$7E,$7E,$7E   ; $61 BODY_V
-        .byte $7E,$FE,$FE,$FE,$FE,$FE,$7E,$00   ; $62 CORNER_LU
-        .byte $00,$7E,$FE,$FE,$FE,$FE,$FE,$7E   ; $63 CORNER_LD
-        .byte $7E,$7F,$7F,$7F,$7F,$7F,$7E,$00   ; $64 CORNER_RU
-        .byte $00,$7E,$7F,$7F,$7F,$7F,$7F,$7E   ; $65 CORNER_RD
+        .byte $7E,$FE,$FE,$FE,$FE,$FE,$FE,$00   ; $62 CORNER_LU
+        .byte $00,$FE,$FE,$FE,$FE,$FE,$FE,$7E   ; $63 CORNER_LD
+        .byte $7E,$7F,$7F,$7F,$7F,$7F,$7F,$00   ; $64 CORNER_RU
+        .byte $00,$7F,$7F,$7F,$7F,$7F,$7F,$7E   ; $65 CORNER_RD
         .byte $18,$3C,$7E,$7E,$5A,$7E,$7E,$7E   ; $66 HEAD_U
         .byte $00,$FC,$EE,$FF,$FF,$EE,$FC,$00   ; $67 HEAD_R
         .byte $7E,$7E,$7E,$5A,$7E,$7E,$3C,$18   ; $68 HEAD_D
