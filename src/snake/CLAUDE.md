@@ -4,9 +4,13 @@ Kontext a mechaniky hry jsou v `README.md`; architektura kódu v hlavičce `snak
 
 ## Pravidla
 
-- **Build:** `make.bat` (`mads snake.asm -o:snake.xex -t:snake.lab`). `*.xex` a `*.lab`
+- **Dvě verze:** `snake.asm` (základní) a `snake_V2.asm` (glyfy, rámeček, titulek, zvuk denied).
+  Společnou logiku měň v obou, nebo řekni uživateli, že se liší.
+- **Build:** `make.bat` (překládá obě verze s `-t:` tabulkou labelů). `*.xex` a `*.lab`
   se necommitují (`.gitignore`).
-- **Po každé změně spusť `python test_snake.py`** – jediný způsob ověření, žádný GUI
+- **Glyfy hada** (`snake_font.inc`) NEeditovat ručně – jsou generované z `gen_font.py`
+  (vzor jednoho glyfu, rotace/zrcadlení). Změna vzhledu = úprava vzoru + `python gen_font.py`.
+- **Po každé změně spusť `python test_snake.py` a `python test_snake_v2.py`** – jediný způsob ověření, žádný GUI
   emulátor na tomto stroji nejede (viz `../tetris/HANDOFF.md`). Test musí končit `ALL OK`.
   Nové mechaniky pokryj v testu.
 - **Bez OS.** Hra si vlastní display list, VBI (`Vbi` → `XITVBV`) a čte hardware přímo
