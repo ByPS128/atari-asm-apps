@@ -60,8 +60,10 @@ reálném stroji přes loader. Hra nepoužívá OS (vlastní display list, VBI, 
 - **Menu** má vlastní display list: titulek SNAKE v ANTIC módu 6 (dvojnásobná šířka,
   barva `COL_TITLE` přes COLPF3; `$47` místo `$46` v `DListMenu` = mód 7, dvojnásobná
   i výška), položky s mezerou po stranách při inverzi.
-- **Zvuk „denied"** – krátký šum při stisku opačného směru (joystick i klávesnice),
-  jen při novém stisku, ne při držení.
+- **Zvuky jako tabulky** dvojic AUDF/AUDC po snímcích (`SfxEat`, `SfxDenied`, `SfxOver`),
+  přehrává je VBI přes `SndPtr`; nový zvuk utne předchozí. Sežrání jablka = šestisnímkový
+  „křup" (mix bzučák/tón/šum převzatý z Wormu), denied = klesavý dvoutón (alert) při stisku
+  opačného směru (joystick i klávesnice), jen při novém stisku, ne při držení.
 
 ## Test
 

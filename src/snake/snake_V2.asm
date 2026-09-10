@@ -4,7 +4,8 @@
 ;  Rozdily proti snake.asm: vlastni znakova sada (had z glyfu 6 px silnych,
 ;  ktere navazuji v zatackach - snake_font.inc z gen_font.py), ohrada z
 ;  ramecovych znaku ROM, titulek v ANTIC mode 6 (menu ma vlastni display
-;  list), zvuk 'denied' pri pokusu o otocku o 180 stupnu, polozky menu
+;  list), zvuk 'denied' pri pokusu o otocku o 180 stupnu, zvuky jako
+;  tabulky po snimcich prehravane ve VBI, polozky menu
 ;  s mezerou po stranach.
 ;
 ;  - Menu (START GAME / ABOUT), hra, obrazovka GAME OVER.
@@ -122,6 +123,7 @@ TxtPtr   = $82             ; ukazatel na text (2 bajty)
 TmpX     = $84
 TmpY     = $85
 InvMask  = $86             ; $00 / $80 - tisk normalne / inverzne
+SndPtr   = $87             ; ukazatel na prehravany zvuk (2 bajty, hi = 0 -> ticho)
 
 ; ---------------------------------------------------------------------
 ;  Makro: tisk textu na (x, y); inverzi ridi InvMask
@@ -172,7 +174,6 @@ InPrev    .byte 0
 InNew     .byte 0          ; vstupy nove stisknute od minuleho snimku
 BgColor   .byte COL_MENU   ; COLPF2 nastavovane ve VBI
 DlPtr     .word DListMenu  ; display list nastavovany ve VBI
-SndTimer  .byte 0          ; zbyvajici snimky zvuku
 
 Selection .byte 0          ; menu: 0 = START GAME, 1 = ABOUT
 Score     .byte 0
@@ -244,7 +245,8 @@ start
         sta GRACTL
         sta AUDCTL
         sta AUDC1
-        sta SndTimer
+        sta SndPtr
+        sta SndPtr+1
         sta InPrev
         lda #3
         sta SKCTL
@@ -805,34 +807,31 @@ PutDigit
         rts
 
 ; =====================================================================
-;  Zvuk (odpocitava VBI)
+;  Zvuk: tabulky dvojic AUDF1,AUDC1 po snimcich, konec $FF; prehrava VBI
 ; =====================================================================
-SoundEat
-        lda #$30
-        sta AUDF1
-        lda #$A6
-        sta AUDC1
-        lda #4
-        sta SndTimer
+; spusti zvuk (A = lo, X = hi adresy tabulky); novy zvuk utne predchozi
+PlaySound
+        sta SndPtr
+        stx SndPtr+1
         rts
 
-SoundDenied
-        lda #$C0
-        sta AUDF1
-        lda #$84                ; sum, tise
-        sta AUDC1
-        lda #3
-        sta SndTimer
-        rts
+SoundEat                        ; krup - mix bzucak/ton/sum (podle Worm)
+        lda #<SfxEat
+        ldx #>SfxEat
+        bne PlaySound
+SoundDenied                     ; alert - klesavy dvouton
+        lda #<SfxDenied
+        ldx #>SfxDenied
+        bne PlaySound
+SoundOver                       ; hluboky ton
+        lda #<SfxOver
+        ldx #>SfxOver
+        bne PlaySound
 
-SoundOver
-        lda #$F0
-        sta AUDF1
-        lda #$A8
-        sta AUDC1
-        lda #30
-        sta SndTimer
-        rts
+SfxEat    dta $5F,$44, $5C,$A6, $57,$84, $5C,$A6, $5C,$A4, $44,$0E, $FF
+SfxDenied dta $50,$AA, $50,$AA, $50,$AA, $78,$AA, $78,$AA, $78,$AA, $78,$A6, $FF
+SfxOver   :30 dta $F0,$A8
+          dta $FF
 
 ; =====================================================================
 ;  Znakova sada, display listy
@@ -895,12 +894,27 @@ Vbi
         sta COLPF2
         lda #COL_TEXT
         sta COLPF1
-        lda SndTimer
+        ; zvuk: dalsi dvojice z tabulky
+        lda SndPtr+1
         beq V_end
-        dec SndTimer
-        bne V_end
-        lda #0
+        ldy #0
+        lda (SndPtr),y
+        cmp #$FF
+        beq V_soff
+        sta AUDF1
+        iny
+        lda (SndPtr),y
         sta AUDC1
+        lda SndPtr
+        clc
+        adc #2
+        sta SndPtr
+        bcc V_end
+        inc SndPtr+1
+        bne V_end
+V_soff  lda #0
+        sta AUDC1
+        sta SndPtr+1
 V_end   jmp XITVBV
 
         run start

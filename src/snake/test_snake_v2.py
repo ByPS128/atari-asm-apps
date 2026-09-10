@@ -92,13 +92,13 @@ def main():
     n0 = len(m.pokey_log)
     m.set_stick(left=True); m.run(10); m.set_stick()
     check(var(m, 'SnakeDir') == 1, 'hra: otoceni o 180 stupnu ignorovano')
-    denied = [(a, v) for _, a, v in m.pokey_log[n0:] if a == 1 and v == 0x84]
-    check(len(denied) == 1, 'hra: zvuk denied zazni jednou (ne kazdy snimek drzeni)')
+    denied = [(a, v) for _, a, v in m.pokey_log[n0:] if a == 1 and v == 0xAA]
+    check(len(denied) == 6, 'hra: zvuk denied zazni jednou (ne kazdy snimek drzeni)')
     # klavesa: CTRL+'+' (vlevo) pri jizde vpravo -> take denied
     m.run(2)                      # uvolneni joysticku se musi projevit
     n0 = len(m.pokey_log)
     m.tap(key=0x06); m.run(2)
-    check(any(a == 1 and v == 0x84 for _, a, v in m.pokey_log[n0:]), 'hra: denied i z klavesnice')
+    check(any(a == 1 and v == 0xAA for _, a, v in m.pokey_log[n0:]), 'hra: denied i z klavesnice')
     # zatacka: nahoru -> stara hlava se stane rohem, hlava miri nahoru
     m.set_stick(up=True); m.run(10); m.set_stick()
     hx, hy = snake(m)[0]
@@ -129,7 +129,7 @@ def main():
     check(var(m, 'Score') == 1 and var(m, 'SnakeLen') == 4, 'hra: jablko sezrano, delka 4')
     check('SCORE 001' in screen(m)[0] and 'LENGTH 004' in screen(m)[0], 'hra: stav po jablku')
     check(len(apples(m)) == 1, 'hra: nove jablko')
-    check(any(a == 1 and v == 0xA6 for _, a, v in m.pokey_log), 'hra: zvuk pri sezrani')
+    check(any(a == 1 and v == 0x84 for _, a, v in m.pokey_log), 'hra: zvuk pri sezrani (krup)')
     m.screenshot(os.path.join(HERE, 'out2_game.png'))
 
     # naraz do zdi -> GAME OVER
