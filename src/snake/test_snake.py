@@ -189,6 +189,21 @@ def main():
     check('SCORE 000' in screen(m)[0], 'hra 3: spustena')
     m.tap(key=KEY_ESC); m.run(3)
     check('START GAME' in screen(m)[10], 'hra 3: ESC vraci do menu')
+    # deterministicky: jablko primo pred hlavu, kontrola glyfu hned po sezrani
+    # (chyba 'dva ocasy' byla videt jen do dalsiho kroku)
+    m = machine(seed=3)
+    m.run(5); m.tap(fire=True); m.run(3)
+    ax, ay = apples(m)[0]
+    m.mem[0x3000 + ay*40 + ax] = 0
+    m.mem[0x3000 + 12*40 + 22] = APPLE
+    for _ in range(40):
+        m.run(1)
+        if var(m, 'Score'):
+            break
+    segs = snake(m)
+    glyphs = [cell(m, x, y) for x, y in segs]
+    check(segs == [(22, 12), (21, 12), (20, 12), (19, 12)] and glyphs == [GL+7, GL+0, GL+0, GL+11],
+          'hra: hned po sezrani je byvaly ocas prekresleny na telo (ne dva ocasy)')
     print('ALL OK, frames', m.frame)
 
 
