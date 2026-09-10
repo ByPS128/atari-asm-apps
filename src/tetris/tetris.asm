@@ -179,6 +179,8 @@ tmp       .byte 0
 tmp2      .byte 0
 tmp3      .byte 0
 tmp4      .byte 0
+sptr      .byte 0,0        ; jen SoundTick (VBI) - nesmi sdilet ptr/ptr2 s hlavnim kodem
+stmp      .byte 0          ; jen SoundTick (VBI)
 cellx     .byte 0
 celly     .byte 0
 FrameCnt  .byte 0
@@ -2825,7 +2827,8 @@ SA_l    sta SndPtrHi,x
         sta AUDC1+6
         rts
 
-; volano z VBI
+; volano z VBI - pouziva VYHRADNE sptr/stmp, protoze prerusi hlavni kod
+; uprostred prace s ptr/ptr2/tmp* (jinak PutStr zapise mimo a hra spadne)
 SoundTick
         ldx #3
 ST_ch   lda SndPtrHi,x
@@ -2835,25 +2838,25 @@ ST_ch   lda SndPtrHi,x
         dec SndCnt,x
         jmp ST_next
 ST_load lda SndPtrLo,x
-        sta ptr2
+        sta sptr
         lda SndPtrHi,x
-        sta ptr2+1
+        sta sptr+1
         ldy #2
-        lda (ptr2),y
+        lda (sptr),y
         beq ST_end
         sta SndCnt,x
         txa
         asl
         tay
-        stx tmp4
+        stx stmp
         tax
         ldy #0
-        lda (ptr2),y
+        lda (sptr),y
         sta AUDF1,x
         iny
-        lda (ptr2),y
+        lda (sptr),y
         sta AUDC1,x
-        ldx tmp4
+        ldx stmp
         lda SndPtrLo,x
         clc
         adc #3
