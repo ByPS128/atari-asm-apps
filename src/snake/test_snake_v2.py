@@ -145,11 +145,28 @@ def main():
     m.tap(fire=True); m.run(3)
     check('START GAME' in screen(m)[10], 'game over: FIRE vraci do menu')
 
-    # ESC ve hre vraci do menu
+    # pauza: P zastavi hada, P znovu pokracuje, START take, ESC v pauze = menu
     m.tap(fire=True); m.run(3)
     check('SCORE 000' in screen(m)[0], 'hra 2: spustena')
+    m.tap(key=0x0A); m.run(1)
+    pos = snake(m)[0]
+    check('PAUSED' in screen(m)[0] and cell(m, 16, 0) == 0x80, 'pauza: napis PAUSED inverzne')
+    m.run(30)
+    check(snake(m)[0] == pos, 'pauza: had stoji')
+    m.tap(key=0x0A); m.run(1)
+    check('PAUSED' not in screen(m)[0], 'pauza: P znovu = pokracovani, napis smazan')
+    m.run(30)
+    check(snake(m)[0] != pos, 'pauza: had zase jede')
+    m.tap(consol='start'); m.run(1)
+    check('PAUSED' in screen(m)[0], 'pauza: START pauzu zapne')
     m.tap(key=KEY_ESC); m.run(3)
-    check('START GAME' in screen(m)[10], 'hra 2: ESC vraci do menu')
+    check('START GAME' in screen(m)[10], 'pauza: ESC v pauze vraci do menu')
+
+    # ESC ve hre vraci do menu
+    m.tap(fire=True); m.run(3)
+    check('SCORE 000' in screen(m)[0], 'hra 3: spustena')
+    m.tap(key=KEY_ESC); m.run(3)
+    check('START GAME' in screen(m)[10], 'hra 3: ESC vraci do menu')
     print('ALL OK, frames', m.frame)
 
 

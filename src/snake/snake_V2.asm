@@ -19,7 +19,7 @@
 ;  - Rychlost roste s kazdym tretim sezranym jablkem (SPEED_STEP).
 ;
 ;  Ovladani: joystick / sipky (CTRL + - = + *), FIRE / RETURN / MEZERNIK
-;            = potvrzeni v menu, ESC = zpet do menu.
+;            = potvrzeni v menu, P / START = pauza, ESC = zpet do menu.
 ;
 ;  Build:  mads snake_V2.asm -o:snake_V2.xex -t:snake_V2.lab   (viz make.bat)
 ;  Test:   python test_snake_v2.py                              (harness emu.py)
@@ -43,6 +43,7 @@ COLPF2   = $D018
 COLPF3   = $D019
 COLBK    = $D01A
 GRACTL   = $D01D
+CONSOL   = $D01F
 
 PORTA    = $D300
 AUDF1    = $D200
@@ -92,6 +93,7 @@ IN_LEFT  = $04
 IN_RIGHT = $08
 IN_FIRE  = $10
 IN_ESC   = $20
+IN_PAUSE = $40             ; P nebo START
 
 ; scan kody klaves (KBCODE & $3F)
 KEY_MINUS  = $0E           ; CTRL+-  = sipka nahoru
@@ -101,6 +103,7 @@ KEY_STAR   = $07           ; CTRL+*  = sipka vpravo
 KEY_RETURN = $0C
 KEY_SPACE  = $21
 KEY_ESC    = $1C
+KEY_P      = $0A
 
 ; smery
 DIR_UP    = 0
@@ -228,11 +231,13 @@ txtScore  .byte "SCORE",$FF
 txtLength .byte "LENGTH",$FF
 txtOver   .byte " GAME OVER ",$FF
 txtPress  .byte "PRESS FIRE OR RETURN",$FF
+txtPause  .byte " PAUSED ",$FF
+txtNoPause .byte "        ",$FF
 txtAb1    .byte "SNAKE FOR ATARI XL/XE",$FF
 txtAb2    .byte "MADS ASSEMBLER, 2025",$FF
 txtAb3    .byte "AUTHOR: PETR SKALOUD (BYPS)",$FF
 txtAb4    .byte "EAT APPLES (*), AVOID WALLS AND",$FF
-txtAb5    .byte "YOUR OWN TAIL. ESC = BACK TO MENU.",$FF
+txtAb5    .byte "YOUR OWN TAIL. P = PAUSE, ESC = MENU.",$FF
 
 ; =====================================================================
 ;  START
@@ -386,7 +391,12 @@ G_loop  jsr WaitFrame
         lda InNew
         and #IN_ESC
         bne G_esc
-        jsr ChooseDir
+        lda InNew
+        and #IN_PAUSE
+        beq G_nop
+        jsr Pause
+        bne G_esc               ; ESC v pauze = konec hry
+G_nop   jsr ChooseDir
         dec Timer
         bne G_loop
         lda Delay
@@ -396,6 +406,26 @@ G_loop  jsr WaitFrame
         beq G_loop
         jmp GameOver
 G_esc   rts
+
+; pauza: PAUSED na stavovem radku; P/START = pokracovat (vraci Z=1),
+; ESC = ukoncit hru (vraci Z=0)
+Pause
+        lda #$80
+        sta InvMask
+        PRINT 16,0,txtPause
+        lda #0
+        sta InvMask
+P_l     jsr WaitFrame
+        jsr ReadInputs
+        lda InNew
+        and #IN_ESC
+        bne P_end
+        lda InNew
+        and #IN_PAUSE
+        beq P_l
+        PRINT 16,0,txtNoPause
+        lda #0
+P_end   rts
 
 ; z drzenych vstupu vybere novy smer; zakaze otoceni o 180 stupnu
 ; (kontroluje se vuci smeru POSLEDNIHO kroku, ne vuci NextDir, aby
@@ -702,7 +732,13 @@ RI_kl   cmp KeyMapCode,x
 RI_kf   tya
         ora KeyMapBit,x
         tay
-RI_2    sty InRaw
+RI_2    lda CONSOL
+        and #1                  ; START (0 = stisknuto)
+        bne RI_3
+        tya
+        ora #IN_PAUSE
+        tay
+RI_3    sty InRaw
         lda InPrev
         eor #$FF
         and InRaw
@@ -711,9 +747,9 @@ RI_2    sty InRaw
         sta InPrev
         rts
 
-KeyMapCode dta KEY_MINUS,KEY_EQUAL,KEY_PLUS,KEY_STAR,KEY_RETURN,KEY_SPACE,KEY_ESC
-KeyMapBit  dta IN_UP,IN_DOWN,IN_LEFT,IN_RIGHT,IN_FIRE,IN_FIRE,IN_ESC
-KEYMAPLEN  = 7
+KeyMapCode dta KEY_MINUS,KEY_EQUAL,KEY_PLUS,KEY_STAR,KEY_RETURN,KEY_SPACE,KEY_ESC,KEY_P
+KeyMapBit  dta IN_UP,IN_DOWN,IN_LEFT,IN_RIGHT,IN_FIRE,IN_FIRE,IN_ESC,IN_PAUSE
+KEYMAPLEN  = 8
 
 ; ceka, az jsou vsechny vstupy v klidu
 WaitRelease
