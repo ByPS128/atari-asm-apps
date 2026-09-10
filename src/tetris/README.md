@@ -37,6 +37,9 @@ přímé čtení hardwaru), takže funguje s BASICem i bez něj.
   díry / nerovnost / smazané řady + náhodný šum) hraje jako průměrný hráč
   lidským tempem. Blikající nápis DEMO nad nápovědou a hláška dole. Jakýkoliv
   vstup demo ukončí.
+- **Barevné kostky** – aktivní kostka a náhled NEXT mají barvu podle typu (I tyrkysová,
+  O žlutá, T fialová, S zelená, Z červená, J modrá, L oranžová) přes hráče P2/P3
+  v dvojnásobné šířce; usazené kostky jsou šedé.
 - **Herní obrazovka** – Graphics 0 (ANTIC mode 2) s vlastním display listem
   26 řádků: studna 10×24 z tenkých čar uprostřed, kostky = plný blok, vpravo
   NEXT (6×6 rámeček, dílek 1:1 ve spawn rotaci), LEVEL, SCORE, LINES, ROWS x/y,

@@ -63,7 +63,8 @@ SKCTL    = $D20F
 ; ---------------------------------------------------------------------
 COL_HINT   = $B0           ; podbarveni napovedy vlevo (player 0)
 COL_PANEL  = $20           ; podbarveni panelu vpravo (player 1)
-COL_WELL   = $02           ; podbarveni studny (player 2+3)
+; barvy kostek (odstin; jas dava COLPF1) - player 2 = aktivni kostka, player 3 = NEXT
+; (vzor design4.asm): I tyrkysova, O zluta, T fialova, S zelena, Z cervena, J modra, L oranzova
 COL_TEXT   = $0C           ; jas textu a kostek (COLPF1)
 COL_BG     = $00           ; pozadi obrazovky (COLPF2, COLBK)
 
@@ -253,6 +254,11 @@ GameOverFlag .byte 0
 MsgId     .byte 0
 NextDirty .byte 0
 PmOn      .byte 0          ; 1 = PMG podbarveni zapnuto (herni obrazovka)
+PcHpos    .byte 0          ; player 2 (aktivni kostka): HPOS, barva, prvni radek dat ($FF = nic)
+PcCol     .byte 0
+PcPrevRow .byte $FF
+NxHpos    .byte 0          ; player 3 (NEXT): HPOS, barva
+NxCol     .byte 0
 RowsInLevel .byte 0        ; smazane rady v aktualnim levelu (binarne)
 RowsTarget .byte 0         ; cil levelu
 TimeFrm   .byte 0          ; snimky do sekundy
@@ -336,6 +342,8 @@ PieceTab
         .byte $02,$10,$11,$12, $01,$11,$21,$22, $10,$11,$12,$20, $00,$01,$11,$21
 
 RotCount  .byte 2,1,4,2,2,4,4       ; pocet odlisnych rotaci (pro AI)
+PieceCol  .byte $90,$E0,$60,$B0,$30,$70,$10   ; I O T S Z J L
+CellMask  .byte $C0,$30,$0C,$03     ; bity hrace (dvojnasobna sirka) pro bunku dx 0..3
 KickTab   .byte 0,$FF,1,$FE,2       ; wall kick posuny
 
 ; rychlost (snimku na 1 radek padu) pro level 1..20
@@ -2338,18 +2346,91 @@ IP_1    lda #$FF
         inx
         cpx #16+8*24
         bne IP_1
-        ldx #16
-IP_2    lda #$FF
-        sta PMAREA+$600,x
-        sta PMAREA+$700,x
+        lda #0
+        sta PcHpos
+        sta NxHpos
+        lda #$FF
+        sta PcPrevRow
+        rts
+
+; ---------------------------------------------------------------------
+;  Player 2 = aktivni kostka: data hrace podle CurType/CurRot/CurX/CurY.
+;  Radek bunky r zacina na scanline 16+8*r (jako P0/P1); bunka dx -> CellMask.
+;  Vola se kazdy snimek z RenderGame (po DrawBoard), kostka je videt jen v ST_FALL
+;  (stejna podminka jako BuildComp).
+; ---------------------------------------------------------------------
+UpdatePiecePM
+        ldx PcPrevRow               ; smaz predchozi (4 radky = 32 scanlinu)
+        cpx #$FF
+        beq UP_1
+        lda #0
+        ldy #32
+UP_e    sta PMAREA+$600,x
         inx
-        cpx #16+8*25
-        bne IP_2
+        dey
+        bne UP_e
+        lda #$FF
+        sta PcPrevRow
+UP_1    lda State
+        cmp #ST_FALL
+        beq UP_2
+        lda #0
+        sta PcHpos
+        rts
+UP_2    lda CurY
+        asl
+        asl
+        asl
+        clc
+        adc #16
+        sta PcPrevRow
+        jsr CurToTest
+        jsr PieceIndex
+        lda #4
+        sta tmp4
+UP_c    lda PieceTab,x
+        :4 lsr
+        asl
+        asl
+        asl
+        clc
+        adc PcPrevRow
+        sta tmp2                    ; prvni scanline bunky
+        lda PieceTab,x
+        and #$0F
+        stx tmp3
+        tax
+        lda CellMask,x
+        sta tmp
+        ldx tmp2
+        ldy #8
+UP_l    lda PMAREA+$600,x
+        ora tmp
+        sta PMAREA+$600,x
+        inx
+        dey
+        bne UP_l
+        ldx tmp3
+        inx
+        dec tmp4
+        bne UP_c
+        lda CurX
+        clc
+        adc #WELL_COL
+        asl
+        asl
+        clc
+        adc #48
+        sta PcHpos
+        ldx CurType
+        lda PieceCol,x
+        sta PcCol
         rts
 
 RenderGame
         jsr BuildComp
         jsr DrawBoard
+        jsr UpdatePiecePM
         lda NextDirty
         beq RG_n
         lda #0
@@ -2463,6 +2544,8 @@ DrawNext
         lda MenuSkill
         cmp #SK_EXP
         bne DN_go
+        lda #0
+        sta NxHpos
         rts
 DN_go   ; vymaz vnitrek: radky NEXT_ROW+1..+4, sloupce NEXT_COL+1..+4
         ldx #NEXT_ROW+1
@@ -2567,6 +2650,59 @@ DN_cell lda PieceTab,x
         inx
         dec tmp4
         bne DN_cell
+        ; player 3: smaz vnitrek NEXT (radky NEXT_ROW+1..+4) a vykresli bunky
+        ldx #16+8*(NEXT_ROW+1)
+        ldy #32
+        lda #0
+DN_pe   sta PMAREA+$700,x
+        inx
+        dey
+        bne DN_pe
+        lda NextType
+        asl
+        asl
+        asl
+        asl
+        tax
+        lda #4
+        sta tmp4
+DN_pc   lda PieceTab,x
+        :4 lsr
+        clc
+        adc celly                   ; radek obrazovky
+        asl
+        asl
+        asl
+        clc
+        adc #16
+        sta tmp2
+        lda PieceTab,x
+        and #$0F
+        stx tmp3
+        tax
+        lda CellMask,x
+        sta tmp
+        ldx tmp2
+        ldy #8
+DN_pl   lda PMAREA+$700,x
+        ora tmp
+        sta PMAREA+$700,x
+        inx
+        dey
+        bne DN_pl
+        ldx tmp3
+        inx
+        dec tmp4
+        bne DN_pc
+        lda cellx                   ; sloupec pro dx=0
+        asl
+        asl
+        clc
+        adc #48
+        sta NxHpos
+        ldx NextType
+        lda PieceCol,x
+        sta NxCol
         rts
 
 ; hodnoty panelu
@@ -2927,22 +3063,23 @@ Vbi
         sta COLPM0
         lda #COL_PANEL
         sta COLPM0+1
-        lda #COL_WELL
+        lda PcCol
         sta COLPM0+2
+        lda NxCol
         sta COLPM0+3
         lda #48+4*(HINT_COL-1)      ; P0 quad: HINT_COL-1 .. +6
         sta HPOSP0
         lda #48+4*(PAN_COL-1)       ; P1 quad: PAN_COL-1 .. +6
         sta HPOSP0+1
-        lda #48+4*WALL_L            ; P2 quad: 14..21
+        lda PcHpos                  ; P2 double: aktivni kostka (4 bunky)
         sta HPOSP0+2
-        lda #48+4*(WALL_L+8)        ; P3 double: 22..25
+        lda NxHpos                  ; P3 double: kostka v NEXT
         sta HPOSP0+3
         lda #3
         sta SIZEP0
         sta SIZEP0+1
-        sta SIZEP0+2
         lda #1
+        sta SIZEP0+2
         sta SIZEP0+3
         jmp V_col
 V_pmoff lda #$22

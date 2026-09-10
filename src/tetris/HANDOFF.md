@@ -44,10 +44,16 @@ Cílový stav: přenést layout z `design3.asm` do `tetris.asm`, přidat nový m
   Atari není čistá černá → panely jsou tmavě tónované; přijato jako vlastnost).
   - P0 quad (`SIZE 3`), HPOS `48+4*1`, sloupce 1..8, řádky 2..22, barva `$90` – nápověda.
   - P1 quad, HPOS `48+4*29`, sloupce 29..36, řádky 8..23, barva `$20` – panel.
-  - P2 quad HPOS `48+4*14` + P3 double (`SIZE 1`) HPOS `48+4*22` = sloupce 14..25 = celá
-    studna včetně stěn a dna, řádky 0..24; odstín po řádcích z tabulky `RowHue` (modrá →
-    zelená → červená) nastavuje **DLI na každém řádku** (`$82`/`$C2`), handler zapisuje
-    `COLPM2/3` po `WSYNC`, čítač `DliRow` nuluje VBI.
+  - **P2 double (`SIZE 1`) = aktivní kostka, P3 double = kostka v NEXT** (od 10.9.2026,
+    vzor `design4.asm`; nahradilo podbarvenou studnu). 1 bit hráče = půl znaku, 8 bitů =
+    4 buňky (`CellMask` $C0/$30/$0C/$03 pro dx 0..3). `UpdatePiecePM` (každý snímek
+    z `RenderGame`) smaže 32 scanlinů od `PcPrevRow`, a je-li `State = ST_FALL`, vyplní
+    data podle `PieceTab` (řádek buňky r = scanline 16+8*r), nastaví `PcHpos =
+    48+4*(WELL_COL+CurX)` a `PcCol = PieceCol[CurType]`. `DrawNext` totéž pro P3
+    (`NxHpos`/`NxCol`; EXPERT → `NxHpos = 0`). VBI jen kopíruje proměnné do registrů.
+    Barvy `PieceCol` (I O T S Z J L) = $90 $E0 $60 $B0 $30 $70 $10; jas dává COLPF1,
+    takže jsou pastelové a sytě červená není možná. Stěny studny jsou v barvě textu.
+    Test: `tools/test_piece_pm.py`.
   - NEXT rámeček zůstává šedý (hráči došly; volitelně střely/missiles).
 - Odmítnuto (neopakovat): GTIA mode 10 plocha, chunky písmo 3×5, mode 4 s 4px fontem,
   textury kostek z grafických symbolů, zvětšený NEXT, modré pozadí, bílé stěny, obří číslo
