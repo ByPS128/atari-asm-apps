@@ -2816,6 +2816,7 @@ DM_c    sta MSG_ADDR,y
         PUTS MSG_ADDR+1, TxtMsgD
 DM_done rts
 DM_paused
+        jsr BlinkSlow               ; pauza blika pomaleji nez DEMO
         PUTS MSG_ADDR+6, TxtMsgP
         rts
 DM_level
@@ -2831,11 +2832,17 @@ DM_overd
         rts
 
 BlinkOr lda FrameCnt
-        and #$10
-        beq BO_0
-        lda #$80
+        and #$10                    ; 16 snimku inverzne / 16 normalne
+        bne BO_1
 BO_0    sta TxtOr
         rts
+BO_1    lda #$80
+        bne BO_0
+BlinkSlow
+        lda FrameCnt
+        and #$20                    ; 32 snimku inverzne / 32 normalne
+        bne BO_1
+        beq BO_0
 
 ; =====================================================================
 ;  Vstupy
