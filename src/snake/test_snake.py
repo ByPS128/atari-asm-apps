@@ -145,6 +145,10 @@ def main():
     m.run(2)
     check(var(m, 'Score') == 1 and var(m, 'SnakeLen') == 4, 'hra: jablko sezrano, delka 4')
     check('SCORE 001' in screen(m)[0] and 'LENGTH 004' in screen(m)[0], 'hra: stav po jablku')
+    segs = snake(m)
+    glyphs = [cell(m, x, y) for x, y in segs]
+    check(glyphs[0] in range(GL+6, GL+10) and glyphs[-1] in range(GL+10, GL+14)
+          and all(g in range(GL, GL+6) for g in glyphs[1:-1]), 'hra: po sezrani jedna hlava, tela, jeden ocas')
     check(len(apples(m)) == 1 and sprite_ok(m, *apples(m)[0]), 'hra: nove jablko i se spritem')
     check(sum(m.mem[P0DATA:P0DATA+512]) == 0x60*2 + 0xF0*4 + 0x20 + 0xE0, 'hra: stary sprite jablka zmizel')
     check(any(a == 1 and v == 0x84 for _, a, v in m.pokey_log), 'hra: zvuk pri sezrani (krup)')

@@ -633,6 +633,8 @@ St_e1   lda SnakeLen
         sta SnakeY,y
         lda TailDir
         sta SegDir,y
+        dey
+        jsr DrawBodySeg         ; byvaly ocas (ted predposledni) zpet na telo
         jsr DrawTail            ; ocas vratit na obrazovku
 St_e2   jsr SpeedUp
         jsr SoundEat
@@ -649,6 +651,22 @@ St_draw ldx SnakeDir
         rts
 
 ; nakresli spicku ocasu na posledni segment (glyf podle jeho smeru)
+; prekresli segment Y (1..len-2) jako telo: in = SegDir[Y], out = SegDir[Y-1]
+DrawBodySeg
+        lda SnakeX,y
+        sta TmpX
+        lda SnakeY,y
+        sta TmpY
+        lda SegDir,y
+        asl
+        asl
+        ora SegDir-1,y
+        tax
+        jsr SetPos
+        lda BodyTab,x
+        sta (ScrPtr),y
+        rts
+
 DrawTail
         ldy SnakeLen
         dey
