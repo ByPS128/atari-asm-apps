@@ -55,8 +55,8 @@ přímé čtení hardwaru), takže funguje s BASICem i bez něj.
 - **Skóre** – 40 / 100 / 300 / 1200 × level za 1–4 řady, +1 za buňku soft dropu,
   +2 za buňku hard dropu. Bonus za řady naskakuje postupně během blikání (24 snímků),
   rozložený rovnoměrně bez dělení (Bresenham po jednotkách 10 bodů), na konci sedí přesně.
-  Stejně naskakuje bonus za dokončený level (1000 × level, 48 snímků). Po dobu napočtu
-  hraje dvoukanálová smyčka cinkání (kanály 0 a 1).
+  Stejně naskakuje bonus za dokončený level (1000 × level, 48 snímků), ten navíc pípá:
+  každý třetí snímek jeden snímek tónu ~960 Hz (kanál 0), jako napočet v Ghostbusters.
 - **Game over** – když nový kus nemá kam spawnout: sestupný zvuk, studna se
   odspodu zaplní, čeká se na FIRE/START.
 - **Zvuky** – POKEY, 4 kanály, jednoduchý sekvencer v VBI (`SoundTick`).

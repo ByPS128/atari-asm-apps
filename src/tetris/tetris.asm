@@ -171,8 +171,8 @@ SFX_MENU   = 9
 SFX_SELECT = 10
 SFX_PAUSE  = 11
 SFX_NOROT  = 12
-SFX_COUNTA = 13            ; napocet skore: dvoukanalova smycka (8 snimku, opakuje ScoreTick)
-SFX_COUNTB = 14
+BEEP_F     = $21           ; pipani napoctu bonusu (~960 Hz), 1 snimek ton + 2 ticho
+BEEP_C     = $A8
 
 ; ---------------------------------------------------------------------
 ;  Nulta stranka
@@ -292,6 +292,8 @@ ScoreRem  .byte 0,0        ; zbyvajici bonus za rady v jednotkach 10 bodu (binar
 ScoreN    .byte 0,0        ; celkovy bonus v jednotkach (N)
 ScoreAcc  .byte 0,0        ; akumulator: kazdy snimek += N, za kazdych ScoreLen jedna jednotka
 ScoreLen  .byte 0          ; delka animace skore ve snimcich (rady 24, level 48)
+ScoreBeep .byte 0          ; 1 = napocet pipa (jen bonus za level), BeepCnt = faze 0..2
+BeepCnt   .byte 0
 SeqCnt    .byte 0          ; citac snimku pro blokujici sekvence (level done, game over)
 SeqRow    .byte 0
 
@@ -1860,8 +1862,9 @@ ScoreLines
 ;  se pricita postupne. N = jednotek po 10 bodech (binarne, max 1800).
 ;  Rozlozeni bez deleni (Bresenham): kazdy snimek ScoreAcc += N a za kazdych
 ;  ScoreLen v akumulatoru se pricte 1 jednotka -> po ScoreLen snimcich presne N,
-;  rovnomerne i pro male bonusy (40 bodu = 4 dily po 6 snimcich). Po dobu napoctu
-;  hraje smycka SFX_COUNTA/B (kanaly 0+1), ScoreTick ji opakuje.
+;  rovnomerne i pro male bonusy (40 bodu = 4 dily po 6 snimcich). Bonus za level
+;  navic pipa (ScoreBeep): kanal 0 primo z ScoreTick, 1 snimek ton + 2 ticho
+;  (jako napocet v Ghostbusters), rady jsou bez zvuku.
 ; ---------------------------------------------------------------------
 StartClearScore
         ldx FullCnt
@@ -1872,6 +1875,8 @@ StartScoreAnim
         sta tmp
         sty ScoreLen
         lda #0
+        sta ScoreBeep
+        sta BeepCnt
         sta ScoreN
         sta ScoreN+1
         sta ScoreAcc
@@ -1918,10 +1923,24 @@ ST_d    lda ScoreAcc
 ST_add  txa
         beq ST_snd
         jsr AddUnits
-ST_snd  lda SndPtrHi                ; smycka napoctu: kdyz dohrala, spustit znovu
-        bne ST_none
-        SFX SFX_COUNTA
-        SFX SFX_COUNTB
+ST_snd  lda ScoreBeep               ; pipani: kazdy treti snimek 1 snimek tonu (kanal 0)
+        beq ST_none
+        lda ScoreRem
+        ora ScoreRem+1
+        beq ST_off                  ; dopocitano -> ticho
+        inc BeepCnt
+        lda BeepCnt
+        cmp #3
+        bcc ST_off
+        lda #0
+        sta BeepCnt
+        lda #BEEP_F
+        sta AUDF1
+        lda #BEEP_C
+        sta AUDC1
+        rts
+ST_off  lda #0
+        sta AUDC1
 ST_none rts
 
 ; A = pocet jednotek (< 100) -> odecist ze ScoreRem (max do 0) a pricist A*10 ke skore
@@ -1990,6 +2009,8 @@ LevelDoneSeq
         lda #100
         ldy #BONUS_LEN
         jsr StartScoreAnim
+        lda #1
+        sta ScoreBeep
         lda #150
         sta SeqCnt
 LDS_l   jsr FrameStep
@@ -2000,6 +2021,9 @@ LDS_l   jsr FrameStep
         dec SeqCnt
         bne LDS_l
         jsr ScoreFlush
+        lda #0
+        sta ScoreBeep
+        sta AUDC1
         lda Level
         cmp #MAXLEVEL
         bcs LDS_nl
@@ -3173,9 +3197,9 @@ ST_next dex
         rts
 
 ; sfx tabulky: kanal + adresa dat
-SfxChan .byte 0,0,1,1,2,2,2,3,2,0,0,1,0,0,1
-SfxLo   .byte <SdMove,<SdRot,<SdDrop,<SdSoft,<SdLine,<SdTetris,<SdFanf1,<SdFanf2,<SdOver,<SdMenu,<SdSelect,<SdPause,<SdNoRot,<SdCountA,<SdCountB
-SfxHi   .byte >SdMove,>SdRot,>SdDrop,>SdSoft,>SdLine,>SdTetris,>SdFanf1,>SdFanf2,>SdOver,>SdMenu,>SdSelect,>SdPause,>SdNoRot,>SdCountA,>SdCountB
+SfxChan .byte 0,0,1,1,2,2,2,3,2,0,0,1,0
+SfxLo   .byte <SdMove,<SdRot,<SdDrop,<SdSoft,<SdLine,<SdTetris,<SdFanf1,<SdFanf2,<SdOver,<SdMenu,<SdSelect,<SdPause,<SdNoRot
+SfxHi   .byte >SdMove,>SdRot,>SdDrop,>SdSoft,>SdLine,>SdTetris,>SdFanf1,>SdFanf2,>SdOver,>SdMenu,>SdSelect,>SdPause,>SdNoRot
 
 ; data: AUDF, AUDC, delka (snimky); delka 0 = konec
 SdMove   .byte $40,$A4,2, 0,0,0
@@ -3191,11 +3215,6 @@ SdOver   .byte $28,$A8,10, $2F,$A8,10, $3C,$A8,10, $50,$A8,10, $79,$AA,25, $FF,$
 SdMenu   .byte $28,$A4,1, $20,$A4,1, 0,0,0
 SdSelect .byte $20,$A6,3, $10,$A8,5, 0,0,0
 SdPause  .byte $40,$A6,3, $60,$A6,3, 0,0,0
-; napocet skore: vlastni 8snimkova smycka (zaznam = 2 snimky), ScoreTick ji opakuje
-; kanal 0 = cinkani stridajici tri vysky, kanal 1 = tichy hluboky puls jednou za smycku
-SdCountA .byte $38,$A8,1, $2C,$A6,1, $24,$A8,1, $2C,$A6,1, 0,0,0
-SdCountB .byte $90,$A4,1, $90,$A2,1, $90,$00,1, $90,$00,1, 0,0,0
-
 ; =====================================================================
 ;  Preruseni
 ; =====================================================================

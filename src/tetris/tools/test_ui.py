@@ -65,8 +65,7 @@ steps = [i for i in range(1, len(vals)) if vals[i] != vals[i-1]]
 check(steps == [6, 12, 18, 24], 'radky: dily na snimcich 6/12/18/24 (%s)' % steps)
 drop = 2 * (22 - y0)                                       # hard drop: 2 body za bunku (T dosedne na y=22)
 check(vals[-1] == s0 + drop + 40 * m.mem[m.label('Level')], 'radky: konecne skore = drop + 40 x level (%d)' % vals[-1])
-cnt = [v for f, a, v in m.pokey_log if a == 0 and v in (0x38, 0x2C, 0x24)]   # AUDF1 = smycka napoctu
-check(len(cnt) >= 10, 'radky: behem napoctu hraje smycka, %d zaznamu' % len(cnt))
+check(not any(a == 0 and v == 0x21 for f, a, v in m.pokey_log), 'radky: napocet bez pipani')
 
 # bonus za level naskakuje 48 snimku a tika
 m = Machine(seed=5); m.load_labels()
@@ -89,6 +88,7 @@ check(vals[-1] == s1 + 1000 * lvl, 'level: bonus 1000 x level pricten (%d -> %d)
 done = vals.index(vals[-1])
 check(all(b >= a for a, b in zip(vals, vals[1:])) and len(set(vals)) > 10 and 44 <= done <= 50,
       'level: bonus naskakuje postupne, dojde ve snimku %d' % done)
-tk = [v for f, a, v in m.pokey_log[n0:] if a == 0 and v in (0x38, 0x2C, 0x24)]
-check(len(tk) >= 18, 'level: smycka napoctu hraje po celou dobu (%d zaznamu)' % len(tk))
+bp = [f for f, a, v in m.pokey_log[n0:] if a == 1 and v == 0xA8]
+check(14 <= len(bp) <= 17 and all(b - a == 3 for a, b in zip(bp, bp[1:])), 'level: pipani kazdy 3. snimek po dobu napoctu (%d pipnuti)' % len(bp))
+check(m.pokey_log[-1][1] == 1 and m.pokey_log[-1][2] == 0 or m.reg(0xD201) == 0, 'level: po napoctu ticho')
 print('ALL OK')
