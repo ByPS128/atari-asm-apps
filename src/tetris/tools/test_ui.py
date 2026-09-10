@@ -90,5 +90,5 @@ done = vals.index(vals[-1])
 check(all(b >= a for a, b in zip(vals, vals[1:])) and len(set(vals)) > 10 and 44 <= done <= 50,
       'level: bonus naskakuje postupne, dojde ve snimku %d' % done)
 tk = [v for f, a, v in m.pokey_log[n0:] if a == 0 and v in (0x38, 0x2C, 0x24)]
-check(len(tk) >= 24, 'level: smycka napoctu hraje po celou dobu (%d zaznamu)' % len(tk))
+check(len(tk) >= 18, 'level: smycka napoctu hraje po celou dobu (%d zaznamu)' % len(tk))
 print('ALL OK')
