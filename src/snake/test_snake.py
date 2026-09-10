@@ -69,6 +69,12 @@ def main():
     check(cell(m, 16, 12) == 0x80 and cell(m, 22, 12) == 0x80 and cell(m, 14, 10) == 0, 'menu: sipka dolu vybere ABOUT')
     m.tap(key=KEY_RETURN); m.run(3)
     check('SNAKE FOR ATARI XL/XE' in screen(m)[6], 'about: zobrazen')
+    check(cell(m, 16, 14) == APPLE, 'about: v napovede je glyf jablka')
+    check(cell(m, 1, 4) == GL+10 and cell(m, 1, 1) == GL+5 and cell(m, 4, 1) == GL+7, 'about: dekoracni had (ocas, roh, hlava)')
+    seen = set()
+    for _ in range(400):
+        m.run(1); seen.add(cell(m, 4, 1))
+    check(seen == {GL+7, GL+15}, 'about: hlava mrka (stridaji se otevrene a zavrene oci)')
     m.tap(key=KEY_ESC); m.run(3)
     check('START GAME' in screen(m)[10], 'about: ESC vraci do menu')
 

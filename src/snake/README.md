@@ -48,6 +48,9 @@ reálném stroji přes loader. Hra nepoužívá OS (vlastní display list, VBI, 
   Tělo = `BodyTab[in*4+out]` (rovně, nebo roh spojující vstupní a výstupní stranu),
   hlava = `HeadTab[dir]`, ocas = `TailTab[směr k dalšímu segmentu]`.
 - **Ohrada** z ROM rámečkových znaků (CTRL-Q/E/Z/C rohy, CTRL-R vodorovně, `|` svisle).
+- **ABOUT** – nápověda ukazuje skutečný glyf jablka; v levém horním rohu je dekorační
+  had (7 znaků: ocas, svislé tělo, roh, vodorovné tělo, hlava), jehož hlava v náhodných
+  intervalech (60–187 snímků) na 6 snímků mrkne (glyf `HEAD_R_BLINK`).
 - **Menu** má vlastní display list: titulek SNAKE v ANTIC módu 6 (dvojnásobná šířka,
   barva `COL_TITLE` přes COLPF3; `$47` místo `$46` v `DListMenu` = mód 7, dvojnásobná
   i výška), položky s mezerou po stranách při inverzi.

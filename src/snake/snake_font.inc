@@ -15,4 +15,5 @@ SnakeGlyphs
         .byte $00,$18,$18,$3C,$3C,$7E,$7E,$7E   ; $6C TAIL_D
         .byte $00,$E0,$F8,$FE,$FE,$F8,$E0,$00   ; $6D TAIL_L
         .byte $10,$30,$7E,$FF,$FF,$FF,$7E,$3C   ; $6E APPLE
-SNAKE_GLYPHS = 15
+        .byte $00,$FC,$FE,$FF,$FF,$FE,$FC,$00   ; $6F HEAD_R_BLINK
+SNAKE_GLYPHS = 16

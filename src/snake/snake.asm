@@ -191,6 +191,8 @@ TailDir   .byte 0
 Dead      .byte 0
 Idx       .byte 0          ; pomocny index
 Idx2      .byte 0
+Blink     .byte 0          ; About: snimku do zmeny stavu oci
+Eyes      .byte 0          ; About: 0 = otevrene, 1 = zavrene
 
 SnakeX    .ds MAX_LEN      ; [0] = hlava
 SnakeY    .ds MAX_LEN
@@ -236,7 +238,7 @@ txtNoPause .byte "        ",$FF
 txtAb1    .byte "SNAKE FOR ATARI XL/XE",$FF
 txtAb2    .byte "MADS ASSEMBLER, 2025",$FF
 txtAb3    .byte "AUTHOR: PETR SKALOUD (BYPS)",$FF
-txtAb4    .byte "EAT APPLES (*), AVOID WALLS AND",$FF
+txtAb4    .byte "EAT APPLES (",CH_APPLE,"), AVOID WALLS AND",$FF
 txtAb5    .byte "YOUR OWN TAIL. P = PAUSE, ESC = MENU.",$FF
 
 ; =====================================================================
@@ -332,9 +334,70 @@ About
         PRINT 10,8,txtAb2
         PRINT 6,10,txtAb3
         PRINT 4,14,txtAb4
-        PRINT 3,15,txtAb5
+        PRINT 3,16,txtAb5
         PRINT 10,20,txtPress
-        jmp WaitConfirm
+        ; dekorace: had (7 znaku) v levem hornim rohu, hlava mrka
+        ldx #0
+AB_s    lda AboutSnake,x
+        sta TmpX
+        lda AboutSnake+1,x
+        sta TmpY
+        lda AboutSnake+2,x
+        pha
+        txa
+        pha
+        jsr SetPos
+        pla
+        tax
+        pla
+        sta (ScrPtr),y
+        inx
+        inx
+        inx
+        cpx #7*3
+        bne AB_s
+        lda #0
+        sta Eyes
+        lda #50
+        sta Blink
+        jsr WaitRelease
+AB_l    jsr WaitFrame
+        jsr ReadInputs
+        lda InNew
+        and #IN_FIRE|IN_ESC
+        bne AB_end
+        dec Blink
+        bne AB_l
+        ; zmena stavu oci: zavrit na 6 snimku, otevrit na 60-187 snimku
+        lda Eyes
+        eor #1
+        sta Eyes
+        beq AB_open
+        lda #6
+        sta Blink
+        lda #GLYPH0+15          ; hlava se zavrenyma ocima
+        bne AB_head
+AB_open lda RANDOM
+        and #$7F
+        clc
+        adc #60
+        sta Blink
+        lda #GLYPH0+7           ; hlava doprava
+AB_head sta SCREEN+AB_HY*40+AB_HX
+        jmp AB_l
+AB_end  rts
+
+; had na About: (x, y, glyf) - ocas dole, svisle nahoru, roh, vodorovne, hlava
+AB_HX   = 4
+AB_HY   = 1
+AboutSnake
+        dta 1,4,GLYPH0+10       ; TAIL_U
+        dta 1,3,GLYPH0+1        ; BODY_V
+        dta 1,2,GLYPH0+1
+        dta 1,1,GLYPH0+5        ; roh RD (prijel zdola, jede vpravo)
+        dta 2,1,GLYPH0+0        ; BODY_H
+        dta 3,1,GLYPH0+0
+        dta AB_HX,AB_HY,GLYPH0+7 ; HEAD_R
 
 ; ceka na FIRE / RETURN / MEZERNIK / ESC (nejdriv na uvolneni vseho)
 WaitConfirm

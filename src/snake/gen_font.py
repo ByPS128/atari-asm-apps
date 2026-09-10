@@ -91,6 +91,8 @@ c_lu = flip_v(c_ld)
 c_rd = flip_h(c_ld)
 c_ru = flip_v(c_rd)
 head_r = grid(HEAD_R)
+head_r_blink = [[('#' if c == '.' and 0 < x < 7 else c) for x, c in enumerate(r)] for r in head_r]
+head_r_blink = [r if i in (2, 5) else head_r[i] for i, r in enumerate(head_r_blink)]   # jen radky s ocima
 head_l = flip_h(head_r)
 head_d = rot90(head_r)
 head_u = flip_v(head_d)
@@ -106,6 +108,7 @@ GLYPHS = [
     ('HEAD_U', head_u), ('HEAD_R', head_r), ('HEAD_D', head_d), ('HEAD_L', head_l),
     ('TAIL_U', tail_u), ('TAIL_R', tail_r), ('TAIL_D', tail_d), ('TAIL_L', tail_l),
     ('APPLE', grid(APPLE)),
+    ('HEAD_R_BLINK', head_r_blink),   # mrknuti (About)
 ]
 
 out = ['; Generovano gen_font.py - NEEDITOVAT rucne. Glyfy hada, interni kody od $60.',
