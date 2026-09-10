@@ -53,8 +53,12 @@ Cílový stav: přenést layout z `design3.asm` do `tetris.asm`, přidat nový m
     **Do paměti hráčů zapisuje výhradně VBI** (smaže `PcPrevRow`, zkopíruje `PcBuf` na
     `PcRow`, `NxBuf` na pevné řádky NEXT, nastaví HPOS/barvy) – když to dělal hlavní kód,
     paprsek uprostřed přepisu ukázal spodek kostky šedě, vždy ve výšce NEXT (Altirra).
-    Barvy `PieceCol` (I O T S Z J L) = $90 $E0 $60 $B0 $30 $70 $10; jas dává COLPF1,
-    takže jsou pastelové a sytě červená není možná. Stěny studny jsou v barvě textu.
+    **Buňky aktivní kostky a NEXT jsou ve videopaměti prázdné** (`BuildComp` značí
+    aktivní buňky bitem `ACTIVE`, `DrawBoard` je kreslí jako mezeru, `DrawNext` také),
+    barvu i jas dává jen hráč → syté barvy `PieceCol` (I O T S Z J L) = $9A $EE $48 $B8
+    $34 $76 $1A (Tetris Guideline: cyan, žlutá, magenta, zelená, červená, modrá, oranžová).
+    Dřívější varianta s plným blokem pod hráčem dávala jen pastel (jas z COLPF1).
+    Stěny studny jsou v barvě textu.
     Test: `tools/test_piece_pm.py`.
   - NEXT rámeček zůstává šedý (hráči došly; volitelně střely/missiles).
 - Odmítnuto (neopakovat): GTIA mode 10 plocha, chunky písmo 3×5, mode 4 s 4px fontem,

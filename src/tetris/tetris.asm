@@ -63,8 +63,9 @@ SKCTL    = $D20F
 ; ---------------------------------------------------------------------
 COL_HINT   = $B0           ; podbarveni napovedy vlevo (player 0)
 COL_PANEL  = $20           ; podbarveni panelu vpravo (player 1)
-; barvy kostek (odstin; jas dava COLPF1) - player 2 = aktivni kostka, player 3 = NEXT
-; (vzor design4.asm): I tyrkysova, O zluta, T fialova, S zelena, Z cervena, J modra, L oranzova
+; barvy kostek - player 2 = aktivni kostka, player 3 = NEXT (vzor design4.asm):
+; I tyrkysova, O zluta, T fialova, S zelena, Z cervena, J modra, L oranzova (Tetris Guideline).
+; Bunky aktivni kostky a NEXT jsou ve videopameti PRAZDNE, barvu i jas dava jen hrac -> syte barvy.
 COL_TEXT   = $0C           ; jas textu a kostek (COLPF1)
 COL_BG     = $00           ; pozadi obrazovky (COLPF2, COLBK)
 
@@ -115,6 +116,7 @@ G_VLINE    = $7C
 BW        = 10             ; sirka plochy
 BH        = 24             ; vyska plochy (radku)
 EMPTY     = 8              ; prazdna bunka
+ACTIVE    = $10            ; bit v Comp: bunka aktivni kostky (kresli se prazdna, barvu dava player 2)
 WHITE     = 7              ; znacka "blikajici rada" (kresli se jako prazdno)
 SK_EASY   = 0
 SK_ADV    = 1
@@ -345,7 +347,7 @@ PieceTab
         .byte $02,$10,$11,$12, $01,$11,$21,$22, $10,$11,$12,$20, $00,$01,$11,$21
 
 RotCount  .byte 2,1,4,2,2,4,4       ; pocet odlisnych rotaci (pro AI)
-PieceCol  .byte $90,$E0,$60,$B0,$30,$70,$10   ; I O T S Z J L
+PieceCol  .byte $9A,$EE,$48,$B8,$34,$76,$1A   ; I O T S Z J L (syte: bunka je prazdna, barvu dava jen hrac)
 CellMask  .byte $C0,$30,$0C,$03     ; bity hrace (dvojnasobna sirka) pro bunku dx 0..3
 KickTab   .byte 0,$FF,1,$FE,2       ; wall kick posuny
 
@@ -2459,6 +2461,7 @@ BC_l    lda Board,y
         ldx #3
 BC_p    ldy CellIdx,x
         lda CurType
+        ora #ACTIVE
         sta Comp,y
         dex
         bpl BC_p
@@ -2517,6 +2520,8 @@ DB_c    txa
         beq DB_e
         cmp #WHITE
         beq DB_e
+        and #ACTIVE                 ; aktivni kostka: prazdno, vykresli ji player 2
+        bne DB_e
         lda #G_SOLID
         bne DB_p
 DB_e    lda #0
@@ -2642,7 +2647,7 @@ DN_cell lda PieceTab,x
         clc
         adc cellx
         tay
-        lda #G_SOLID
+        lda #0                      ; bunka prazdna, barvu dava player 3
         sta (ptr),y
         inx
         dec tmp4
