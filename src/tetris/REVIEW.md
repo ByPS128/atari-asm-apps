@@ -1,6 +1,6 @@
 # Kontrola a opravy Tetrisu – 11. 9. 2026
 
-Aktuální práce je ve větvi `feature/tetris-current-review-fixes`: slučuje
+Revize vznikla ve větvi `feature/tetris-current-review-fixes`: slučuje
 `origin/main` na `199b92c` s dosavadními opravami z `ebe0654`.
 Barevná hra, novější HELP a animované skóre jsou zachované. Zdrojový kód
 je autorita; README, HANDOFF, AGENTS a SPEC popisují tento spojený stav.
@@ -98,5 +98,6 @@ git switch -c feature/tetris-colored-baseline 199b92c
 ./make.bat
 ```
 
-Lokální main i předchozí feature větev zůstávají zachované. Ignorované XEX
+Původní stav lokální main je dostupný v commitu `92c29b3`; předchozí feature
+větev zůstává zachovaná jako záloha. Ignorované XEX
 a labely se při změně větve samy nevrátí: vždy znovu přeložit příslušný zdroj.
