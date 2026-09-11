@@ -1,26 +1,39 @@
 ;
-; Překládej v MADS
+; Debug knihovna pro Atari XL/XE (debuglib.asm, drive sounds.asm)
+; Verze: 1.0
+; Určeno pro: assembler MADS
 ;
+; Knihovna poskytuje rutiny pro debugování a ladění programů
+; Všechny veřejné rutiny zachovávají registry
+; Interní rutiny předpokládají nastavené registry
+;-----------------------------------------------------------
 
 ; Systémové adresy
-SCREEN  = $BC40                     ; Adresa obrazovky
-RTCLOK  = $12                       ; Real-time clock
-CONSOL  = $D01F                     ; Console speaker
-KEYBDV  = $E420                     ; Keyboard handler vector
-KGETCH  = $F6                       ; Key Get Character
-ANTIC    = $D400                    
-WSYNC    = ANTIC+10
+; viz https://atariwiki.org/wiki/Wiki.jsp?page=Atari%20800%20ROM%20OS%20Source%20Listing
+SCREEN   = $BC40                     ; Adresa obrazovky
+CONSOL   = $D01F                     ; Console speaker
+KEYBDV   = $E420                     ; Keyboard handler vector
+ANTIC    = $D400                     ; ANTIC čip
+SWAP     = $F962                     ; Swap, nutné volat při změně režimu z grafiky na text a obráceně.
+WSYNC    = ANTIC+10                  ; Wait for HBLANK synchronizace
+BELL     = $F556                     ; OS Bell sound routine
+KEYCLICK = $F983                     ; OS Key click sound
+DRAWTO   = $F9AF                     ; OS Draw to
+BEEPWAIT = $FDFC                     ; OS BEEPWAIT - v A počet opakování
+DSKRDERR = $C63B                     ; Disk read error - vypíš BOOT ERROR
+PUTLIN   = $C642                     ; OS Put line X-REG -- LO BYTE, Y-REG -- HI BYTE, BEGIN ADDR OF LINE
+RTCLOK   = $12                       ; Real-time clock
+KGETCH   = $F6                       ; Key Get Character
 
-; Systémové rutiny, viz https://atariwiki.org/wiki/Wiki.jsp?page=Atari%20800%20ROM%20OS%20Source%20Listing
-; adresy rutin v OS Atari, prefixuji je OS
-OSBELL     = $F556
-OSKEYCLICK = $F983
+DERR5    = $C43D              ;DISK ERROR MSG POINTER
+DERRH	 = DERR5/256          ;HI BYTE
+DERRL    = (-256)*DERRH+DERR5 ;LO BYTE
 
-; Lokální proměnné 
-FREQ       = $CB                    ; Frequency counter
-
-
-              org $2000             ; Počáteční adresa programu
+;-----------------------------------------------------------
+; Lokální proměnné demo aplikace
+;-----------------------------------------------------------
+FREQ         = $CB                   ; Frequency counter
+               org $2000             ; Počáteční adresa programu
               
 start   
                lda #<DBGT_STR_ACCU    ; Nastav nízký byte ukazatele
@@ -28,10 +41,19 @@ start
                lda #>DBGT_STR_ACCU    ; Nastav vysoký byte ukazatele
                sta DBUG_PTR_H
                jsr DBG_PRINT          ; Zavolej výpis textu 'accu: '
-               jsr OSKEYCLICK
+               jsr KEYCLICK
                lda #$37              ; Příklad hodnoty A registru
                jsr DBG_PRINT_A        ; Zavolej výpis hodnoty A
                jsr DBG_PRINT_CRLF     ; Nový řádek               
+
+               ; Test výpisu paměti
+               lda #<DERR5           ; Adresa pro výpis
+               sta DBUG_PTR_L
+               lda #>DERR5
+               sta DBUG_PTR_H
+               lda #5                ; Počet řádků
+               jsr DBG_DUMP_MEM       ; Vypíšu paměť
+               jsr DBG_PRINT_CRLF
 
                ; Test výpisu paměti
                lda #<$2000           ; Adresa pro výpis
@@ -40,6 +62,36 @@ start
                sta DBUG_PTR_H
                lda #5                ; Počet řádků
                jsr DBG_DUMP_MEM       ; Vypíšu paměť
+               jsr DBG_PRINT_CRLF
+
+
+               lda #1
+               ldx #DERRL
+               ldy #DERRH
+               jsr PUTLIN
+               
+               lda #1
+               ldx #<DEMO_STR_PUTLIN  ; PUTLIN chce řádek ukončený EOL ($9B),
+               ldy #>DEMO_STR_PUTLIN  ; ne BRK (0) jako DBG_PRINT - nula by vyšla jako srdíčko
+               jsr PUTLIN
+               
+               ; Test, vypíše BOOT ERROR
+               ;jsr DSKRDERR
+               
+               ; Test, zabzučí 1x
+               ;lda #1
+               ;jsr BEEPWAIT
+               
+               ; Test rolování textu nahoru
+               ;lda #$00
+               ;sta $026E             ; fien scrfl
+               ;sta $026C             ; fine scroll
+               ;jsr OS_DOSCROLL       ; Rolování obrazu
+               ;jsr OS_DOSCROLL       ; Rolování obrazu
+               ;jsr OS_DOSCROLL       ; Rolování obrazu
+               ;jsr OS_DOSCROLL       ; Rolování obrazu
+               ;jsr OS_DOSCROLL       ; Rolování obrazu
+               ;jsr OS_DOSCROLL       ; Rolování obrazu
         
                jmp MAIN_LOOP
  
@@ -58,25 +110,30 @@ start
               ;jsr beep
 
               ; zvuk znaku $7D (125) 
-              jsr OSBELL            ; volám rutinu v OS pro generování zvuku BELL
-              LDY 50                ; počkám 0.5 sekundy
+              jsr BELL            ; volám rutinu v OS pro generování zvuku BELL
+              LDY #50               ; počkám 0.5 sekundy
               JSR DBG_WAIT_Y10_MS
               jsr DBG_BELL              ; vlastní implementace generování zvuku BELL
               
 MAIN_LOOP:    jmp MAIN_LOOP         ; nekonečná smyčka
+;-----------------------------------------------------------
     
+
+
+
+
 ;-----------------------------------------------------------
 ; BEEP 1x
 ;-----------------------------------------------------------
 DBG_BEEP_ONE_TIME:
-              lda $01               ; pípne 1x
+              lda #1                ; pípne 1x
               jmp DBG_BEEP
                             
 ;-----------------------------------------------------------
 ; BEEP 2x
 ;-----------------------------------------------------------
 DBG_BEEP_TWO_TIMES:
-              lda $02               ; pípne 2x
+              lda #2                ; pípne 2x
               jmp DBG_BEEP
 
 ;-----------------------------------------------------------
@@ -85,7 +142,8 @@ DBG_BEEP_TWO_TIMES:
 ;-----------------------------------------------------------
 DBG_BEEP:
               sta FREQ
-@beeploop:    lda RTCLOK+2          ; Current clock
+@beeploop:    
+              lda RTCLOK+2          ; Current clock
               clc 
           .ifdef PAL
               adc #25
@@ -93,15 +151,18 @@ DBG_BEEP:
               adc #30               ; 1 sec tone
           .endif
               tax 
-@wfl:         lda #$FF
+@wfl:         
+              lda #$FF
               sta CONSOL            ; Turn on speaker
               lda #0
               ldy #$F0              ; zpomalení
-@loop_inc:    dey             
+@loop_inc:    
+              dey             
               bne @loop_inc
               sta CONSOL            ; Turn off speaker
               ldy #$F0              ; zpomalení
-@loop_dec:    dey
+@loop_dec:    
+              dey
               bne @loop_dec
               cpx RTCLOK+2          ; See if 1 sec is up yet
               bne @wfl
@@ -115,43 +176,48 @@ DBG_BEEP:
               adc #10
           .endif
               tax
-@wait:        cpx RTCLOK+2
+@wait:        
+              cpx RTCLOK+2
               bne @wait
               beq @beeploop         ; Uncond do beep again
-@beepend:     rts
+@beepend:     
+              rts
 
 ;-----------------------------------------------------------
 ; CLICK: MAKE CLICK THROUGH KEYBOARD SPEAKER
 ;-----------------------------------------------------------
 DBG_CLICK:
-                 LDX  #$7F             ; inicializuje X na hodnotu 127
-@loop_DBG_CLICK: STX  CONSOL           ; uloží hodnotu X do CONSOL registru (ovládá speaker)
-                 STX  WSYNC            ; synchronizace s HBLANK intervalem
-                 DEX                   ; dekrementuje X 
-                 BPL  @loop_DBG_CLICK  ; pokračuje dokud X není negativní
-                 RTS                   ; návrat
+              LDX  #$7F             ; inicializuje X na hodnotu 127
+@loop_DBG_CLICK: 
+              STX  CONSOL           ; uloží hodnotu X do CONSOL registru (ovládá speaker)
+              STX  WSYNC            ; synchronizace s HBLANK intervalem
+              DEX                   ; dekrementuje X 
+              BPL  @loop_DBG_CLICK  ; pokračuje dokud X není negativní
+              RTS                   ; návrat
         
 ;-----------------------------------------------------------
 ; čaká na klávesu
 ;-----------------------------------------------------------
 DBG_WAIT_FOR_KEY:
-                           jsr @wfak1_DBG_WAIT_FOR_KEY ; Use simulated "JMP (KGETCH)"
-                           tya
-                           rts
-@wfak1_DBG_WAIT_FOR_KEY:   lda KEYBDV+5
-                           pha
-                           lda KEYBDV+4          ; Simulate "JMP (KGETCH)"
-                           pha
-                           rts
+              jsr @wfak1_DBG_WAIT_FOR_KEY ; Use simulated "JMP (KGETCH)"
+              tya
+              rts
+@wfak1_DBG_WAIT_FOR_KEY:
+              lda KEYBDV+5
+              pha
+              lda KEYBDV+4          ; Simulate "JMP (KGETCH)"
+              pha
+              rts
                           
 ;-----------------------------------------------------------
 ; Bell sound
 ;-----------------------------------------------------------
-DBG_BELL:         LDY  #$20             ; hodnota časování/délky zvuku
-@loop_DBG_BELL:   JSR  DBG_CLICK        ; zavolá rutinu DBG_CLICK pro generování zvuku  
-                  DEY                   ; dekrementuje Y
-                  BPL  @loop_DBG_BELL   ; opakuje dokud Y není negativní
-                  RTS
+DBG_BELL:     LDY  #$20             ; hodnota časování/délky zvuku
+@loop_DBG_BELL:   
+              JSR  DBG_CLICK        ; zavolá rutinu DBG_CLICK pro generování zvuku  
+              DEY                   ; dekrementuje Y
+              BPL  @loop_DBG_BELL   ; opakuje dokud Y není negativní
+              RTS
               
 ;-----------------------------------------------------------
 ; Vstup: Y = počet 10ms intervalů
@@ -205,16 +271,13 @@ DBG_DELLAY_1_MS:
     TAY
     RTS
                      
-; Debug knihovna pro Atari XL/XE
-; Vyžaduje základní textový mód
-
-;opt ?+
-
+;-----------------------------------------------------------
 ; Systémové adresy
 OS_OUTCH    = $F1B4       ; OUTPUT CHAR TO SCREEN
-OS_CURSEOL  = $F661       ; CURSOR TO END OF LINE
-OS_ROWCRS   = $54         ; Aktuální řádek 
-OS_COLCRS   = $55         ; Aktuální sloupec
+CURSEOL     = $F661       ; CURSOR TO END OF LINE
+OS_DOSCROLL = $F7F7       ; Rolování obrazu
+CURSROW     = $54         ; Aktuální řádek (také ROWCRS nebo ROWCR) 
+CURSCOL     = $55         ; Aktuální sloupec (také COLCRS nebo COLCR)
 OS_ATACHR   = $02FB       ; ATASCII znak
 OS_CRSINH   = $02F0       ; Cursor inhibit flag
 
@@ -228,8 +291,6 @@ DBUG_PTR_L = $F0          ; ZP - pointer low
 DBUG_PTR_H = $F1          ; ZP - pointer high
 
     org DEBUG_START        
-
-; Rutiny pro hexadecimální výpisy
 
 ;-----------------------------------------------------------
 ; Vytiskne obsah A registru hexa  
@@ -353,6 +414,8 @@ DBG_PRINT:
     lda (DBUG_PTR_L),y    ; Načtu znak
     cmp #BRK              ; Je konec řetězce?
     beq @done_DBG_PRINT
+    cmp #EOL              ; Je konec řetězce?
+    beq @done_DBG_PRINT
     cpy #255              ; Kontrola přetečení délky
     beq @done_DBG_PRINT     
     
@@ -464,24 +527,26 @@ DBG_DUMP_MEM_CONT
       bcs @notprint_DBG_DUMP_MEM_CONT         ; >= 127 = netisknutelný
       jmp @print_DBG_DUMP_MEM_CONT            ; Jinak vytisknu znak
 @notprint_DBG_DUMP_MEM_CONT:
-      lda #'.'             ; Netisknutelný = tečka
+      lda #'.'                                ; Netisknutelný = tečka
 @print_DBG_DUMP_MEM_CONT:  
-      jsr DBGI_PUT_CHAR      ; Vypíšu znak
+      jsr DBGI_PUT_CHAR                       ; Vypíšu znak
       iny
-      cpy #BYTES_PER_LINE   ; Konec řádku?
+      cpy #BYTES_PER_LINE                     ; Konec řádku?
       bne @ascii_loop_DBG_DUMP_MEM_CONT
 
-      ;jsr OS_CURSEOL        ; Přesunu kurzor na začátek dalšího řádku
+      ; výpis vychází přesně tak, že konří na posledním sloupci
+      ; proto není potřeba zalomit řádek
+      ;jsr CURSEOL        ; Přesunu kurzor na začátek dalšího řádku
 
       ; Posun ukazatele o délku řádku
       clc
       lda DBUG_PTR_L
-      adc #BYTES_PER_LINE   ; Přičtu délku řádku
+      adc #BYTES_PER_LINE                 ; Přičtu délku řádku
       sta DBUG_PTR_L
-      bcc @skip_DBG_DUMP_MEM_CONT             ; Přenos?
-      inc DBUG_PTR_H        ; Zvýším horní byte
+      bcc @skip_DBG_DUMP_MEM_CONT         ; Přenos?
+      inc DBUG_PTR_H                      ; Zvýším horní byte
 @skip_DBG_DUMP_MEM_CONT:
-      pla                   ; Obnovím registry
+      pla                                 ; Obnovím registry
       tay
       pla  
       tax
@@ -498,6 +563,8 @@ DBGT_STR_X
     dta 'x: ', BRK
 DBGT_STR_Y
     dta 'y: ', BRK
+DEMO_STR_PUTLIN
+    dta 'PUTLIN test', EOL
     
 ;-----------------------------------------------------------
     
