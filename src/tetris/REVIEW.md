@@ -1,176 +1,95 @@
-# Kontrola Tetrisu podle zdroje – 11. 9. 2026
+# Kontrola a opravy Tetrisu – 11. 9. 2026
 
-Herní jádro má dobrý základ: oddělené usazené buňky a vykreslovaný obraz,
-přehledné stavy spawn/pád/mazání, tabulky levelů a rozumně malé datové struktury.
-Obraz je čitelný a sestavená hra má přibližně 9 KB. Kontrola však našla
-jednu závažnou chybu paměti, dva problémy odezvy/chování a slabiny ověřování.
+Opravy jsou ve větvi `feature/tetris-review-fixes`. Výchozí stav hry,
+dokumentace a reprodukcí nálezů je uložen v commitu `61b7820`.
+Všech pět hlavních nálezů je vyřešených; cílený audit nyní vrací prázdný
+seznam `detected_issues` a návratový kód 0.
 
-Kontrolován současný `tetris.asm`, přeložený příkazem
-`mads tetris.asm -o:tetris.xex -t:tetris.lab`. Zdroj hry nebyl při auditu změněn.
-Výsledky níže pocházejí ze statického čtení a z provedení sestavených rutin
-v místním harnessu; nejsou potvrzením na skutečném Atari ani v plném emulátoru.
+## Nálezy a jejich řešení
 
-## 1. P1: VBI přepisuje ukazatel a dočasnou proměnnou hlavního programu
-
-**Místo:** `SoundTick` / `ST_load` kolem řádku 2837, volání z `Vbi`;
-uživatelé stejných proměnných například `PutStr` (3006), `PutDec2` (2638),
-`DrawNext`, `FillPattern`, `TryRotate` a `RemoveFullRows`.
-
-Zvukový sekvencer používá `ptr2`, `ptr2+1` a `tmp4`. Hlavní program v nich
-má rozpracovaný cíl textu, data struktury nebo čítač. VBI tyto tři bajty
-neukládá ani neobnovuje. Zachování A/X/Y přes OS nechrání obsah RAM.
-
-**Ověření:** připravit efekt MOVE, `ptr=TxtLevel`, `ptr2=$6000`, `tmp4=$7B`
-a přerušit vstup do `PutStr` pomocí skutečné rutiny VBI.
-
-| Výsledek | Bez přerušení | S přerušením |
+| Nález ve výchozím stavu | Provedená oprava | Ověření |
 |---|---|---|
-| `$6000–$6004` | screen kódy `LEVEL` | zůstávají nuly |
-| Prvních pět bajtů `SdMove` | `$40,$A4,$02,$00,$00` | `$2C,$25,$36,$25,$2C` = `LEVEL` |
-| `tmp4` | `$7B` | `$00` |
+| P1: VBI přepsalo pracovní `ptr2/tmp4`; text skončil ve zvukové tabulce | `SoundTick` má vlastní ZP ukazatel `SndRead`; číslo kanálu ukládá na zásobník VBI | Přerušení zápisu textu, uchování registrů a pracovní ZP u všech 13 efektů, neměnnost kódu/tabulek při pěti časováních harnessu |
+| P2: monolitické `AiPlan` přehlédlo krátký ESC | `AiPlan` jen zahájí hledání; `StPlan` volá `AiPlanStep` po jednom kandidátovi za krok, mezi kroky běží vstupy a čas | ESC držený tři snímky ukončí demo, každý krok obnoví Board, hledání všech sedmi typů skončí nejvýše po 48 krocích |
+| P2: PAUSED nezastavilo dokončení levelu | `LevelDoneSeq` během pauzy nesnižuje odpočet; game over pauzu ignoruje | Level i odpočet během 160 snímků pauzy stojí, po obnovení přechod doběhne; game over stále přijímá START/ESC |
+| P2: `test_game.py` neměl aserce výsledků | Přidané kontroly stavů, vykreslené studny, obtížností, pauzy a návratů; rozšířený audit | Herní scénář končí `ALL OK`, audit kódem 0; čitelnost a rozvržení ověřeny také na PNG |
+| P2: `make.bat` pokračoval po chybě | Zastavení s kódem 1 po každém neúspěšném překladu, varianta `game`, práce ve vlastním adresáři | Test chyby na každém ze čtyř překladů, úspěšný úplný build a varianta `game`, cesty s mezerami |
 
-Tedy nejde jen o chybně zobrazený znak: hlavní kód zapisuje do tabulky zvuku.
-Změní také délky tónů a ukončení sekvence. U dalších uživatelů `tmp4` hrozí
-chybný počet iterací. Tyto další důsledky jsou odvozené z použití proměnné;
-přepsání zvukových dat bylo přímo reprodukováno.
+## Zjednodušení a výkon
 
-Druhý scénář nepotřebuje ručně vložené VBI: při rozpočtu harnessu 8000
-instrukcí/snímek projde úvodem, zvolí ADVANCED/level 4 a provede několik
-hard dropů. Změní pět bajtů `SdSelect` na `$42C7–$42CB` (adresy tohoto buildu).
-S výchozími 10000 instrukcemi stejný scénář data nepoškodil. Změna rozpočtu
-testuje jinou fázi přerušení, nikoli přesné časování reálného procesoru.
+- `BoardDirty` a `ValuesDirty` dovolují přeskočit nezměněnou studnu/panel.
+  Zpráva a DEMO banner mají cache obsahu a fáze blikání. Vynucení při vstupu
+  do hry i změny po pohybu, rotaci, pádu, mazání a novém levelu jsou zachované.
+- Čtyři mazací rutiny menu nahradila `ClearMenuItem` s tabulkou adres.
+- Odstraněny nepoužívané `RowBuf`, `DliCnt` a `TxtH3`. `GROWS` se používá
+  v display listu, `MSG_DEMO` jako klíč cache zprávy.
+- Pole a odpovídající smyčky používají `BOARD_SIZE`; MADS aserce hlídají
+  10×24 a osmibitový index. Tabulky a rozvržení nadále výslovně odpovídají
+  těmto rozměrům. Aserce chrání také hranici kódu před PMG oblastí.
+- Opravené zastaralé komentáře a kontaktový list screenshotů: výška každé
+  buňky nyní vychází z nejvyššího obrázku, takže spodní části hry nejsou oříznuté.
 
-**Oprava:** vyhradit zvuku vlastní ZP ukazatel a vlastní dočasnou proměnnou,
-nebo tyto tři bajty na vstupu VBI uložit a před návratem obnovit. Oddělené
-proměnné dávají jasnější kontrakt. `SEI` tuto chybu neřeší, protože VBI je NMI.
-Opravit před optimalizacemi a znovu ověřit přerušení u všech uživatelů těchto ZP.
+| Měření v harnessu | Před opravou | Po opravě |
+|---|---:|---:|
+| Instrukce nezměněného `RenderGame` | 3 228 | 22 |
+| Zápisy nezměněného `RenderGame` do obrazovky | 62 | 0 |
+| Nejdelší souvislé plánování na prázdné ploše (ze sedmi typů) | 190 618 instrukcí | nejvýše 5 697 instrukcí v jednom kroku |
+| Velikost sestaveného XEX | 9 287 B | 9 471 B |
 
-## 2. P2: plánování dema blokuje čtení vstupů a herní krok
+Počet instrukcí není měření cyklů nebo času na skutečném Atari. Celkový
+objem hledání AI zůstává podobný; změnou je jeho rozdělení. Během hledání
+zůstává dílek ve spawn poloze a běží čas, pak přejde do pádu s obvyklým
+čítačem přemýšlení 14. U složitějších kusů může hledání trvat 48 herních kroků.
 
-**Místo:** `AiPlan` (1898), `AP_drop` (1915), `Evaluate` (1973),
-volání z `StSpawn`. Čtení skutečného vstupu je až ve `FrameStep` (1231).
+## Rozsah úspěšného ověření
 
-AI v jednom souvislém volání vyhodnotí všechny rotace a polohy, pro každou
-opakuje pád po buňkách a průchod celou studnou. Během toho nečte ovládání
-a neprovádí běžný herní krok ani jeho časovač.
+- Překlad hry i všech tří prototypů přes `make.bat`.
+- 10 976 hraničních kombinací typu/rotace/pozice proti kolizi s okrajem.
+- 120 náhodných ploch s 1–4 plnými řádky proti referenčnímu mazání.
+- 60 kombinací obtížnosti/levelu proti tabulkám startovních struktur.
+- 100 číselných převodů a 80 kombinací bodování řad.
+- Všech 13 úplných POKEY sekvencí: AUDF/AUDC, délky, ukončení, uchování
+  registrů, decimal flagu a pracovní ZP při VBI.
+- Hledání všech typů AI po krocích s vykreslováním mezi nimi, obnova Board
+  po každém kandidátovi a omezení počtu instrukcí kroku.
+- Krátký ESC při hledání, zastavení a obnovení dokončení levelu, OPTION
+  při bootu, hranice DEV levelů, N/G a jejich neúčinnost v běžném režimu.
+- Průchod menu, HELP, EASY, ADVANCED, EXPERT, pauzou, dokončením levelu,
+  game over a demem s kontrolou stavů a obsahu vykreslené studny.
+- Čtyři testy řízení buildu; jeden obsahuje čtyři podscénáře chyb překladače.
+- Kontrola vykresleného přehledu obrazovek a `git diff --check`.
 
-Na prázdné studni bylo naměřeno:
+Harness je částečný model hardwaru. Poslech skutečného POKEY, plný OS
+a chování na fyzickém Atari či NTSC zůstávají mimo rozsah tohoto ověření.
+Úspěšné kontroly nevylučují chybu v jiném netestovaném stavu.
 
-| Kus | Provedené instrukce v `AiPlan` |
-|---|---:|
-| I | 94 186 |
-| O | 51 197 |
-| T | 190 217 |
-| S | 95 959 |
-| Z | 95 955 |
-| J | 190 618 |
-| L | 190 576 |
+## Opakování kontrol
 
-U J to odpovídá zhruba 19 rozpočtům výchozího harnessu po 10000 instrukcích;
-není to měření cyklů ani času na skutečném Atari. K plánování se přidává
-ještě explicitní čítač přemýšlení AI.
-
-**Ověření dopadu:** při plánování T podržet ESC tři snímky a uvolnit.
-Po dokončení výpočtu `AbortFlag=0`, `Demo=1`, display list zůstává herní `$7000`.
-Následné delší držení ESC vrátí menu `$7100`. Krátký vstup se úplně ztratí.
-
-**Oprava:** rozdělit hledání do několika kandidátů za herní krok, průběžně
-obsluhovat vstupy a uchovat stav hledání. Hypotetický kus musí být před
-přerušením hledání odstraněn z `Board`. Samotná mikrooptimalizace výpočtu
-neřeší ztrátu vstupu při delším plánování tak spolehlivě.
-
-## 3. P2: pauza nezastaví dokončení levelu
-
-**Místo:** `LevelDoneSeq` / `LDS_l` (1828); obdobná struktura `GameOverSeq` (1847).
-
-`FrameStep` přepne `Paused`, ale sekvence pokračuje v odpočtu bez jeho kontroly.
-Uživatel vidí PAUSED, zatímco se v pozadí dokončí level, vymaže studna a načte další.
-
-**Ověření:** během fanfáry stisk P. Před čekáním bylo `Level=1`, `Paused=1`,
-`SeqCnt=140`; po dalších 160 snímcích `Level=2`, `Paused=1`, `SeqCnt=0`.
-V běžném pádu/mazání řad pauza stavy zastavuje, takže se chová nekonzistentně.
-`SPEC.md` už toto současné chování výslovně popisuje; změna vyžaduje aktualizaci zadání.
-
-**Návrh:** reprezentovat dokončení levelu a game over jako další stavy hlavní
-smyčky. Jedno místo pak rozhoduje o pauze, ESC a časovačích. Menší zásah je
-zastavit odpočet sekvence při pauze; u game over je vhodné jasně určit,
-zda vůbec má přijímat pauzu, nebo jen návrat do menu.
-
-## 4. P2: původní test hry nehlídá správnost výsledků
-
-**Místo:** `tools/test_game.py`, model snímku v `tools/emu.py`.
-
-Test vypisuje hodnoty a ukládá PNG, ale neobsahuje aserce pravidel hry.
-Může doběhnout s nesprávným skóre, levelem nebo poškozenými daty.
-Pevný rozpočet instrukcí navíc opakuje stejné fáze přerušení; chyba z bodu 1
-se při jednom rozpočtu projeví a při jiném zůstane skrytá.
-
-**Návrh:** doplnit aserce klíčových stavů, invariant neměnnosti kódu/tabulek,
-řízené přerušení uvnitř rutin a více rozpočtů/fází VBI. Obrazové kontroly
-zachovat. Přiložený audit část těchto kontrol zavádí, nenahrazuje celou sadu
-přejímacích scénářů ze `SPEC.md` ani ověření zvuku a hardwaru.
-
-## 5. P2: build může zakrýt neúspěšný překlad hry
-
-**Místo:** všechny čtyři příkazy v `make.bat`.
-
-Po chybě překladu hry se bez kontroly návratového kódu sestavují prototypy.
-Úspěšný poslední příkaz může zakrýt původní chybu; pokud zůstane starý XEX,
-uživatel či testovací skript může ověřovat jinou verzi, než právě upravil.
-Tento nález vychází z řízení skriptu; aktuální přímý překlad hry prošel.
-
-**Oprava:** po každém překladu ukončit skript při chybě. Hru sestavovat
-s labely společně a spouštět testy jen po úspěšném buildu. Samostatný přepínač
-pro prototypy může zjednodušit běžný vývojový cyklus.
-
-## Zjednodušení a výkon po opravách
-
-- `RenderGame` při nezměněném obrazu spotřeboval 3228 instrukcí a provedl
-  62 zápisů do obrazovky: 22 číslic/oddělovačů panelu a 40 nul zprávového řádku.
-  Nejprve stačí přepisovat hodnoty jen po změně a zprávu při změně stavu/fáze
-  blikání. Stávající `NextDirty` už podobný princip používá. `DrawBoard` má
-  užitečné porovnávání změněných řádků; bez měření bych ho nepřepisoval.
-- `RowBuf` (10 B) nemá použití, `DliCnt` se pouze nuluje, `TxtH3` není nikde
-  vykreslený. `GROWS` a `MSG_DEMO` jsou nepoužité konstanty. Úklid ušetří
-  desítky bajtů a hlavně odstraní matoucí pozůstatky; nepřinese zásadní zrychlení.
-- Čtyři `ClearItem0`–`ClearItem3` dělají totéž s jinou adresou. Jedna rutina
-  s cílovým ukazatelem či tabulkou adres omezí duplicitu.
-- Rozměry mají pojmenované `BW/BH`, ale pole a řada smyček zároveň používají
-  pevně 240/239/24. Vyjádřit odpovídající délky přes konstanty a přidat
-  kontrolu při překladu, že index plochy stále vyhovuje osmibitové adresaci.
-- Hlavička zdroje stále jmenuje BASIC/EXPERT, neexistující `PatternTab`
-  a libovolnou klávesu. Jde o komentáře; skutečnou implementaci už popisují
-  aktualizované dokumenty. Při opravách sjednotit i tyto komentáře.
-
-## Co prošlo cíleným ověřením
-
-- 10 976 kombinací typu/rotace/pozice pro kolize s okraji na prázdné studni,
-  včetně záporných počátků, když skutečné buňky leží uvnitř.
-- 120 náhodných ploch s různými kombinacemi 1–4 mazaných řad proti jednoduchému
-  referenčnímu posunu řádků.
-- 60 kombinací obtížnosti a levelu proti datům startovních struktur.
-- 100 převodů čísel 0–99 a 80 kombinací skóre za řady (20 levelů × 4 počty).
-- Plánování všech sedmi typů na prázdné ploše po návratu obnovilo původní Board.
-
-Tyto výsledky platí pro uvedené scénáře; nevylučují chybu při jiném stavu
-nebo přerušení. Běžný vizuální průchod hrou byl ověřen při předchozí kontrole
-dokumentace. Zvuk na skutečném POKEY ani úplný OS audit zde proveden nebyl.
-
-## Opakování auditu
-
-Po úspěšném překladu z `src/tetris`:
+Z `src/tetris` v PowerShellu, po úspěšném buildu:
 
 ```powershell
-mads tetris.asm -o:tetris.xex -t:tetris.lab
+./make.bat
+python tools/test_build.py
 python tools/audit_tetris.py
+cd tools
+python test_game.py
 ```
 
-Audit vyžaduje stejné prostředí jako harness (Python 3 + Pillow).
-Vypíše JSON s důkazy a seznamem `detected_issues`; při nálezu vrátí kód 1.
-Na kontrolované verzi hlásí přepis proměnných ve VBI, poškození dat při
-běžném scénáři, přehlédnutí ESC v demu a přechod levelu během pauzy.
-První dvě hlášení mají společnou příčinu popsanou v bodu 1.
+Pythonové herní kontroly samy nesestavují XEX ani labely. Úspěšný audit
+vrací 0 a prázdné `detected_issues`; při nálezu vrací 1. Herní průchod vypíše
+`ALL OK`. Potřebné závislosti jsou Python 3 a Pillow.
 
-Doporučené pořadí práce: uchování stavu přes VBI a jeho regresní kontroly,
-spolehlivý build, průběžné plánování AI, sjednocení pauzy, potom drobný úklid
-a optimalizace vykreslování.
+## Návrat k výchozímu stavu
+
+`main` zůstává na původní historii. Commit `61b7820` ve feature větvi
+obsahuje hru před opravami a k ní dokumentaci i reprodukce původních chyb.
+Pro další pokus z tohoto bodu lze vytvořit novou větev:
+
+```powershell
+git switch -c feature/tetris-before-review 61b7820
+./make.bat
+```
+
+Přepínat s uloženými změnami. XEX a labely jsou ignorované výstupy, takže
+se při změně větve samy nevrátí: po přepnutí je nutné znovu sestavit příslušný
+zdroj. Původní reprodukce v `61b7820` záměrně hlásí tehdejší vady.

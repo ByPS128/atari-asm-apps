@@ -198,9 +198,9 @@ i čas; VBI, grafika a zvukový sekvencer pokračují. ESC funguje i v pauze.
 Čas je mm:ss, po 50 aktivních krocích přibude sekunda, po 60 sekundách minuta;
 po 99:59 se přetočí. Počítá i demo, mazání řad a dokončení levelu.
 
-Původní dokončení levelu a game over jsou samostatné blokující sekvence:
-ESC je přeruší, ale jejich animační odpočty po stisku pauzy dále pokračují.
-Tato zvláštnost patří k referenčnímu chování; nejde o globální zmrazení VBI.
+Dokončení levelu při pauze zastaví i svůj 150snímkový odpočet; po obnovení
+pokračuje ze stejné hodnoty. Game over pauzu nepřijímá a jeho animace pokračuje.
+ESC přeruší obě sekvence. VBI a zvukový sekvencer běží stále.
 
 Game over nastane až při neplatném spawnu. Přehrát sestupný zvuk a postupně
 zaplnit všech 24 řádků odspodu, jeden řádek za 2 snímky. Čas už nepřičítat.
@@ -313,10 +313,18 @@ Minimalizovat `1000 + 3*Agg + 12*Holes + 2*Bump + 6*MaxH - 24*FullL`,
 ke každému kandidátovi přidat náhodný šum 0–31. Při shodě ponechat první
 kandidát. Hypotetické vložení nesmí změnit skutečnou herní plochu.
 
-Po spawnu AI čeká s čítačem 14; v kroku s nenulovým čítačem jej sníží
+Hledání rozdělit po nejvýše jednom kandidátovi za herní krok. Mezi kroky
+číst uživatelský vstup a aktualizovat čas. Aktivní dílek při hledání zůstává
+viditelný ve spawn poloze; gravitace začne po výběru cíle. Hypotetické vložení
+vždy odstranit před návratem z kroku, také před vykreslením nebo opuštěním dema.
+Rozpracovaná rotace a X musí přežít vykreslování i čtení vstupů. Při čtyřech
+rotacích jde nejvýše o 48 kandidátů, včetně neplatných počátečních poloh.
+
+Po dokončení hledání AI čeká s čítačem 14; v kroku s nenulovým čítačem jej sníží
 a nic neprovede. Při nule udělá jeden tah a nastaví čítač na náhodných 6–9.
 Nejdříve rotuje k cíli, potom se posouvá vodorovně. Po dosažení cíle náhodně
-zvolí hard drop nebo trvalé držení dolů. Gravitace běží i během přemýšlení.
+zvolí hard drop nebo trvalé držení dolů. Gravitace běží během tohoto čekání
+a provádění tahů; během předchozí fáze hledání stojí.
 AI neplánuje složité cesty pod převisy a nemá zaručenou cestu k vybranému cíli.
 Má působit jako nedokonalý hráč; přesná délka přežití závisí na náhodě.
 
@@ -341,7 +349,7 @@ a PAUSE při přepnutí pauzy.
 
 Pro obdobnou nativní implementaci rezervovat ZP pro ukazatele a dočasné
 hodnoty, RAM pro 10×24 usazených buněk, složený obraz a poslední obraz.
-Referenční rozložení: ZP `$80–$91`, kód/data od `$2000` pod `$5000`,
+Referenční rozložení: ZP `$80–$92`, kód/data od `$2000` pod `$5000`,
 PMG `$5000–$57FF`, herní obrazovka `$6000–$640F` s mazáním až do `$64FF`,
 menu `$6A00–$6BFF`, display listy `$7000`/`$7100`, ROM font `$E000–$E3FF`.
 Jiné adresy jsou přípustné při zachování funkce a nepřekrývání oblastí.
@@ -352,12 +360,26 @@ výpočty vyčistit decimal flag. Synchronizovat herní krok s VBI. VBI nastavuj
 display list a barvy každého snímku, aby se zachoval správný obraz při použití OS.
 Při změně obrazovky měnit současně display list i režim DLI. Každá nová hra
 musí obnovit svůj herní stav bez spoléhání na obsah RAM před spuštěním.
+Zvukové přerušení musí uchovat pracovní paměť hlavního programu: referenční
+verze používá vlastní ZP ukazatel `SndRead` a původní číslo kanálu na zásobníku.
+Obecné ukazatele a dočasné proměnné nesmí sdílet bez uložení a obnovení.
+
+Stabilní obraz nepřepisovat každý snímek: příznaky změny plochy a hodnot
+nastavit při změně příslušných dat, zprávy/banner aktualizovat při změně
+obsahu nebo fáze blikání. Při přepnutí na herní obrazovku vynutit úplný překresl.
+Předpřipravené rozvržení/tabulky počítají s 10×24; jejich předpoklady a rozsah
+osmibitového indexu ověřovat asercemi překladače.
+
+Build se musí zastavit při první chybě a vrátit nenulový kód. Referenční
+`make.bat` sestaví hru i prototypy, `make.bat game` jen XEX hry a její labely.
 
 ## 12. Přejímací scénáře
 
-Toto jsou požadavky na ověření nové implementace. Současný `tools/test_game.py`
-je pouze část podkladu: přehrává některé scénáře a ukládá obraz, nemá jejich
-automatické aserce. Úspěch tohoto skriptu sám nesplňuje celý následující seznam.
+Toto jsou požadavky na ověření nové implementace. `tools/test_game.py`
+kontroluje herní stavy a vykreslenou studnu a ukládá obraz. `tools/audit_tetris.py`
+přidává cílené aserce pravidel, přerušení, zvukových dat a DEV, `tools/test_build.py`
+ověřuje řízení buildu. Samotný úspěch těchto skriptů neověřuje například
+skutečný zvuk POKEY a celý obraz na fyzickém Atari.
 
 | ID | Příprava a akce | Očekávaný výsledek |
 |---|---|---|
@@ -381,11 +403,17 @@ automatické aserce. Úspěch tohoto skriptu sám nesplňuje celý následujíc�
 | A18 | Opakovaně hra → ESC/game over → menu → hra | Správná grafika, nová hra bez zbytků plochy/skóre/časovačů, bez přenosu stisku |
 | A19 | Zachytit jednotlivé obrazovky | Pozice, barvy, měřítko NEXT, chybějící NEXT v EXPERT a všech 26 řádků odpovídají zadání |
 | A20 | Vyvolat všechny zvuky, souběžně fanfáru | Správné kanály/trojice, překrývání podle kanálů, slyšitelný výsledek v plném emulátoru nebo na Atari |
+| A21 | Přerušit zápis textu pomocí VBI při aktivních zvucích; měnit fázi VBI | Text jde do obrazovky, kód/tabulky se nemění, pracovní paměť a registry hlavní smyčky se obnoví |
+| A22 | Při plánování AI stisknout ESC na tři snímky | Návrat do menu; před opuštěním kandidáta je Board obnovený |
+| A23 | Pauza během fanfáry, čekání, obnovení | Level ani odpočet se během pauzy nezmění; po obnovení sekvence doběhne |
+| A24 | Vynutit chybu každého překladu v make.bat | Nenulový kód a žádný další překlad po chybě; varianta game sestavuje pouze hru |
+| A25 | Opakovaně vykreslit nezměněný herní stav | Žádné zápisy do obrazovky; po změně kusu, skóre nebo zprávy jsou příslušné části aktualizované |
 
 U krokových testů oddělit počet VBI od vykreslení screenshotu; referenční
 harness při `screenshot()` provede další snímek. Náhodný generátor pro
 ověřování řídit seedem nebo dodanou posloupností. Shodu rozvržení kontrolovat
-na samostatných snímcích; složený přehled může obrazovky různých výšek oříznout.
+na samostatných snímcích; složený přehled musí mít buňky dost vysoké pro
+nejvyšší obrazovku, aby kratší menu nezpůsobilo oříznutí herních snímků.
 
 ## 13. Mapa původu požadavků
 
@@ -398,7 +426,7 @@ na samostatných snímcích; složený přehled může obrazovky různých výš
 | Levely a struktury | StartLevel, FillPattern, LevelDoneSeq, SpeedTab, TargetTab, Pat1–Pat12 |
 | Pauza, čas a DEV | start, FrameStep, GameOverSeq |
 | Obraz | SetGameScreen, DrawNext, DrawValues, InitPMG, Vbi, Dli, GameDL, MenuDL |
-| Demo | IdleTick, AiPlan, Evaluate, AiStep |
+| Demo | IdleTick, StPlan, AiPlan, AiPlanStep, Evaluate, AiStep |
 | Zvuk | PlaySfx, SoundTick, SfxChan, Sd* |
 
 Přílohy níže jsou datový snímek těchto tabulek. Jsou součástí zadání;

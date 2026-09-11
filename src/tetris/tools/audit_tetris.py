@@ -88,6 +88,37 @@ for interrupted in (False, True):
         'tmp4_after': val(m, 'tmp4'),
     }
 
+# Every effect preserves mainline ZP/registers and emits the original sequence.
+for effect in range(13):
+    m = fresh()
+    channel = m.mem[m.label('SfxChan')+effect]
+    pointer = m.mem[m.label('SfxLo')+effect] | (m.mem[m.label('SfxHi')+effect] << 8)
+    expected = []
+    tick = 0
+    while m.mem[pointer+2]:
+        freq, control, length = m.mem[pointer:pointer+3]
+        expected.extend([(tick, channel*2, freq), (tick, channel*2+1, control)])
+        tick += length + 1
+        pointer += 3
+    expected.append((tick, channel*2+1, 0))
+    m.cpu.x = effect
+    call(m, 'PlaySfx')
+    protected = [a for a in range(0x80, m.label('SndRead'))
+                 if a not in (m.label('FrameCnt'), m.label('DliMode'))]
+    for a in protected:
+        m.mem[a] = (a*37) & 255
+    original_zp = [m.mem[a] for a in protected]
+    m.cpu.a, m.cpu.x, m.cpu.y = 0xA5, 0x83, 0x72
+    m.cpu.d = True
+    original_cpu = (m.cpu.a, m.cpu.x, m.cpu.y, m.cpu.sp, m.cpu.pc, m.cpu.flags())
+    for frame in range(tick+1):
+        m.frame = frame
+        m.run_interrupt(0x222, True)
+        assert original_zp == [m.mem[a] for a in protected], ('VBI ZP', effect)
+        assert original_cpu == (m.cpu.a, m.cpu.x, m.cpu.y, m.cpu.sp, m.cpu.pc, m.cpu.flags()), ('VBI registers', effect)
+    assert m.pokey_log == expected, ('POKEY sequence', effect)
+RESULT['sound_interrupts'] = '13 complete effects: registers/ZP/timing OK'
+
 # Check scalar helpers and line awards across every supported level.
 m = fresh()
 for value in range(100):
@@ -166,15 +197,28 @@ for piece in range(7):
                 cases += 1
 RESULT['fits_empty'] = f'{cases} boundary cases OK'
 
-# Measure cost without a simulated clock or injected VBI.
+# Measure bounded AI steps, with rendering interleaved to clobber Test*.
 RESULT['ai_instructions_empty'] = {}
 for piece, name in enumerate(['I','O','T','S','Z','J','L']):
     m = fresh()
     put(m, 'CurType', piece)
+    put(m, 'State', m.label('ST_PLAN'))
     before = bytes(m.mem[m.label('Board'):m.label('Board')+240])
     instructions = call(m, 'AiPlan')
-    assert bytes(m.mem[m.label('Board'):m.label('Board')+240]) == before
-    RESULT['ai_instructions_empty'][name] = instructions
+    costs = []
+    for step in range(48):
+        costs.append(call(m, 'AiPlanStep'))
+        done = m.cpu.c
+        assert bytes(m.mem[m.label('Board'):m.label('Board')+240]) == before
+        call(m, 'RenderGame')
+        if done:
+            break
+    else:
+        raise AssertionError('AI did not finish within 48 candidates')
+    assert max(costs) < 6500, (name, max(costs))
+    RESULT['ai_instructions_empty'][name] = {
+        'total': instructions + sum(costs), 'max_step': max(costs), 'steps': len(costs),
+    }
 m = fresh()
 call(m, 'SetGameScreen')
 call(m, 'RenderGame')
@@ -186,6 +230,7 @@ def traced_wr(addr, value):
     original_wr(addr, value)
 m.wr = traced_wr
 RESULT['idle_render'] = {'instructions': call(m, 'RenderGame'), 'screen_writes': len(writes)}
+assert not writes and RESULT['idle_render']['instructions'] < 100, 'unchanged screen was redrawn'
 
 def started():
     m = fresh()
@@ -234,6 +279,39 @@ before = {n: val(m,n) for n in ['Level','Paused','SeqCnt']}
 m.run(160)
 after = {n: val(m,n) for n in ['Level','Paused','SeqCnt']}
 RESULT['level_transition_while_paused'] = {'before': before, 'after': after}
+assert before['Paused'] == after['Paused'] == 1
+assert before['SeqCnt'] == after['SeqCnt'], 'paused countdown advanced'
+m.tap(key=0x0A)
+m.run(160)
+assert val(m,'Level') == 2 and val(m,'Paused') == 0, 'level did not resume'
+
+# OPTION is sampled at boot; debug shortcuts must stay disabled normally.
+m = fresh()
+m.set_consol(option=True)
+m.run(3)
+m.set_consol()
+m.run(10)
+m.tap(fire=True)
+assert val(m,'DevMode') == 1 and val(m,'LevelMax') == 20
+put(m,'MenuLevel',20)
+m.tap(consol='select')
+assert val(m,'MenuLevel') == 1
+put(m,'MenuLevel',15)
+m.tap(consol='select')
+assert val(m,'MenuLevel') == 16
+m.tap(consol='start')
+m.run(5)
+m.tap(key=0x23)
+m.run(5)
+assert val(m,'Level') == 17 and val(m,'RowsInLevel') == 0
+m.tap(key=0x3D)
+m.run(60)
+assert val(m,'GameOverFlag') == 1
+m = started()
+m.tap(key=0x23)
+m.tap(key=0x3D)
+assert val(m,'Level') == 1 and val(m,'GameOverFlag') == 0
+RESULT['dev_mode'] = 'boot OPTION, level bounds, N/G and normal-mode guards OK'
 
 # Changing only the instruction budget should never modify immutable code/data.
 RESULT['phase_sweep'] = []

@@ -44,7 +44,7 @@ Hra používá font z ROM, žádný z obou include souborů nenačítá.
 - Titulní obrazovka a menu mají samostatný `MenuDL` na `$7100` a texty od
   `$6A00`. Titulek používá mode 7, podtitul a položky mode 6, nápověda mode 2.
   DLI vykresluje duhu titulku; HELP používá herní textovou obrazovku bez PMG.
-- ZP je `$80–$91`, kód a data od `$2000` musí zůstat pod PMG na `$5000`.
+- ZP je `$80–$92`, kód a data od `$2000` musí zůstat pod PMG na `$5000`.
   Adresy rutin a proměnných ověřuj v čerstvém `tetris.lab`.
 
 ## Herní jádro
@@ -66,9 +66,13 @@ Hra používá font z ROM, žádný z obou include souborů nenačítá.
 - `Board`, `Comp`, `PrevComp` mají každý 240 bajtů. `Board` obsahuje usazené
   kostky, `BuildComp` přidává padající kus nebo blikající řady, `DrawBoard`
   kreslí jen změněné řádky. `EMPTY=8`, `WHITE=7` se vykreslují jako prázdno.
+  `BoardDirty`/`ValuesDirty` zabraňují zbytečnému sestavování obrazu a zápisu
+  panelu. Zpráva a banner mají cache obsahu/fáze blikání.
 - `StSpawn` připraví kus v rotaci 0 na X=3/Y=0 a kontroluje kolizi;
   `StFall` zpracuje pohyb a pád; `StClear` nechá řady třikrát bliknout během
   24 snímků, odstraní je, přičte skóre a vyhodnotí cíl levelu.
+  Demo mezi spawnem a pádem používá `StPlan`, nejvýše jeden kandidát za krok.
+  Během hledání se čtou vstupy a běží čas, aktivní dílek zůstává ve spawn poloze.
 - Rotace postupuje o jednu variantu s vodorovnými kicky `0,-1,+1,-2,+2`.
   Pohyb má DAS 12/4 snímky. Soft drop má interval 2 snímků a po spawnu
   vyžaduje uvolnění směru dolů před opětovným zrychlením.
@@ -77,12 +81,14 @@ Hra používá font z ROM, žádný z obou include souborů nenačítá.
   `RowsInLevel`/`RowsTarget` jsou binární. Čas v `FrameStep` počítá 50 snímků
   na sekundu a stojí při pauze/game over; hra neprovádí detekci PAL/NTSC.
 - Demo začíná po 750 snímcích nečinnosti na titulní obrazovce nebo v menu,
-  používá zvolený level a obtížnost. `AiPlan`/`Evaluate` hodnotí výšky,
+  používá zvolený level a obtížnost. `AiPlan` zahájí hledání,
+  `AiPlanStep`/`Evaluate` hodnotí výšky,
   díry, nerovnost a plné řady s náhodným šumem, `AiStep` simuluje vstupy.
   Návrat do menu vyvolají namapované herní vstupy nebo START/SELECT/OPTION;
   libovolná nenamapovaná klávesa demo neukončí.
 - `GameOverSeq` zaplní studnu odspodu a čeká na FIRE, nahoru, hard drop nebo
   START; ESC hru opustí. Demo po zaplnění čeká 150 snímků a vrátí se samo.
+  Game over nepřepíná pauzu; dokončení levelu naopak při pauze drží odpočet.
 
 ## Hardware a vývojové pasti
 
@@ -91,6 +97,8 @@ ale závisí na OS: instaluje přerušení přes `VVBLKI`/`VDSLST`, VBI se vrac�
 přes `XITVBV` a font bere z ROM. `Vbi` aktualizuje display list, režim DLI,
 barvy, PMG a čtyřkanálový zvukový sekvencer `SoundTick`. DLI při herním režimu
 jen obnoví registry a vrátí se. Obě přerušení před výpočty provádějí `CLD`.
+Zvuk používá soukromý ukazatel `SndRead` a kanál ukládá na zásobník;
+pracovní ukazatele ani `tmp*` hlavní smyčky nepřepisuje.
 
 MADS nerozlišuje velikost písmen labelů; adresové výrazy zapisuj jako
 `<(label+7)` a `>(label+7)`. Texty pro `PUTS` používají `dta d'...',$FF`,
@@ -106,13 +114,18 @@ mads tetris.asm -o:tetris.xex -t:tetris.lab
 # Po úspěšném překladu:
 cd tools
 python test_game.py
+python audit_tetris.py
+python test_build.py
 python emu.py 120 out.png
 ```
 
 Harness vyžaduje Python 3 a Pillow. `test_game.py` pokrývá průchod menu,
 HELP, EASY, dokončením levelu, ADVANCED, EXPERT, pauzou, ESC, game over a demem.
-Vypisuje stavy a ukládá obrázky; nemá aserce herního chování ani scénář pro DEV.
-Výpisy a relevantní obrázky je nutné zkontrolovat. Skripty samy nesestavují XEX.
+Kontroluje stavy i soulad plochy s obrazem; při úspěchu vypíše `ALL OK` a vrátí 0.
+`audit_tetris.py` přidává kontroly kolizí, řad, struktur, VBI, zvukových sekvencí,
+postupného hledání AI, pauzy a DEV. `test_build.py` ověřuje řízení dávkového
+buildu v dočasném adresáři. Skripty herních testů samy nesestavují XEX.
+`make.bat` sestaví i prototypy, `make.bat game` jen hru; první chyba build ukončí.
 
 `tools/emu.py` s `tools/cpu6502.py` modeluje potřebnou část CPU/grafiky,
 DLI/WSYNC a PMG, nahrazuje potřebné chování přerušení OS. POKEY zápisy pouze

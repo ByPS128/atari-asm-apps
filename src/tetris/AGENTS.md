@@ -17,15 +17,14 @@ v `SPEC.md` jsou požadavky na ověření, nikoli tvrzení o existujícím pokry
 
 - Pracuj z `src/tetris`. Hru sestav příkazem
   `mads tetris.asm -o:tetris.xex -t:tetris.lab` (MADS v `PATH`).
-  `./make.bat` sestaví také všechny tři designové prototypy, ale nezastaví se
-  při chybě; kontroluj jednotlivé překlady.
+  `./make.bat` sestaví také všechny tři designové prototypy, `./make.bat game`
+  jen hru a labely. Skript se po první chybě zastaví s nenulovým kódem.
 - Před ověřováním změny assembleru úspěšně sestav aktuální XEX i labely.
   Harness sám nepřekládá a staré výstupy neověřují nový kód.
 - Z `tools` spusť `python test_game.py` (Python 3 + Pillow).
-  Skript vypisuje stavy a vytváří `out_n_*.png` a `out_n_sheet.png`.
-  Nemá aserce herního chování, proto kromě návratového kódu zkontroluj
-  relevantní výpisy a obrázky. Nové chování ověř cíleným scénářem;
-  vývojářský režim současný skript nepokrývá.
+  Skript kontroluje herní stavy a soulad studny s obrazovkou, vytváří
+  `out_n_*.png` a `out_n_sheet.png`. Úspěch = `ALL OK` a návratový kód 0.
+  Po změně vzhledu zkontroluj také relevantní obrázky.
 - Samostatný screenshot: z `tools` spusť `python emu.py 120 out.png`.
   Pro další scénáře použij `Machine`, `load_labels()`, `label()`, `tap()`,
   `set_key()`, `set_stick()`, `set_consol()` a `screenshot()` v `tools/emu.py`.
@@ -43,19 +42,22 @@ v `SPEC.md` jsou požadavky na ověření, nikoli tvrzení o existujícím pokry
   z `src/tetris` pomocí `python tools/audit_tetris.py`. Při nálezu vrací kód 1.
   Při opravě nálezu aktualizuj jeho stav v review a zachovej odpovídající
   regresní ověření. Audit není náhradou za všechny přejímací scénáře.
+- Po změně hry spusť také audit (včetně DEV a zvukového sekvenceru).
+  Po změně buildu spusť `python tools/test_build.py`; test ověřuje zastavení
+  po chybě každého překladu a variantu `game` v izolovaném dočasném adresáři.
 
 ## Architektura a současné mechaniky
 
 - `tetris.asm` obsahuje celou hru: proměnné a tabulky, titulní obrazovku/menu,
-  `RunGame`/`FrameStep`, stavy `StSpawn`/`StFall`/`StClear`, kolize a rotace,
+  `RunGame`/`FrameStep`, stavy `StSpawn`/`StPlan`/`StFall`/`StClear`, kolize a rotace,
   skóre, levely, AI, vykreslování, vstupy, zvuky a přerušení.
 - `Board` = usazené buňky, `Comp` = obraz včetně padajícího kusu/blikání,
   `PrevComp` = poslední vykreslený stav. Každé pole má 240 bajtů (10×24).
   Typy kusů jsou 0–6, `WHITE=7` je značka skryté blikající řady, `EMPTY=8`.
-  Při změně rozměrů zkontroluj také pevné délky polí, smyčky a tabulky.
+  Délky polí/smyček používají `BOARD_SIZE`. Aserce MADS hlídají rozměry 10×24
+  a osmibitový index; při změně rozměrů uprav i pevné tabulky a rozvržení.
 - EASY má prázdnou studnu a NEXT, ADVANCED struktury a NEXT, EXPERT
-  struktury bez celého rámečku NEXT. Názvy BASIC a dvoustupňová obtížnost
-  ve starších komentářích už neplatí.
+  struktury bez celého rámečku NEXT.
 - `SpeedTab` a `TargetTab` určují rychlost a cíl řádků. Po dosažení cíle
   `LevelDoneSeq` přičte 1000 × level a připraví prázdnou plochu či strukturu
   dalšího levelu. Maximum je 20 a tento level se opakuje. Menu běžně dovoluje
@@ -67,7 +69,16 @@ v `SPEC.md` jsou požadavky na ověření, nikoli tvrzení o existujícím pokry
 - `ReadInputs` čte hardware a vytváří držené/nové vstupy. Demo začíná po
   750 snímcích nečinnosti na titulní obrazovce nebo v menu a přerušují jej
   pouze namapované herní vstupy či START/SELECT/OPTION. AI plánuje v
-  `AiPlan`/`Evaluate` a simuluje vstupy v `AiStep`.
+  `AiPlan`/`AiPlanStep`/`Evaluate` a simuluje vstupy v `AiStep`.
+  `StPlan` vyhodnotí nejvýše jednoho kandidáta za krok. `AiSearchX/Rot` musí
+  přežít vykreslování, které přepisuje `Test*`; při návratu z `AiPlanStep`
+  musí být hypotetický dílek odstraněný z `Board`. Čas/vstupy během hledání
+  běží, gravitace začne až ve `StFall`.
+- `BoardDirty` a `ValuesDirty` nastavuj při změně zobrazovaných dat;
+  `SetGameScreen` oba příznaky vynucuje. `RenderGame` stabilní části přeskakuje.
+  Cache zprávy/banneru zohledňuje jejich obsah i fázi blikání.
+- Pauza zastavuje i odpočet `LevelDoneSeq`. Game over pauzu ignoruje;
+  potvrzení a ESC zůstávají aktivní.
 
 ## Obraz a vazba na OS
 
@@ -86,7 +97,7 @@ v `SPEC.md` jsou požadavky na ověření, nikoli tvrzení o existujícím pokry
   `XITVBV`, `Dli` obnovuje A/X/Y a končí `RTI`.
 - Vstupy čti přes `PORTA`, `TRIG0`, `CONSOL`, `SKSTAT`/`KBCODE` a náhodu přes
   `RANDOM`. Harness neaktualizuje OS shadow registry vstupů.
-- ZP zabírá `$80–$91`, program/data začínají na `$2000` a musí zůstat pod PMG
+- ZP zabírá `$80–$92`, program/data začínají na `$2000` a musí zůstat pod PMG
   oblastí `$5000–$57FF`. Obrazovka je `$6000–$640F`, ale její mazání sahá do
   `$64FF`. Menu rezervuje `$6A00–$6BFF`; display listy jsou na `$7000`/`$7100`.
   Aktuální adresy rutin a proměnných ber z čerstvého `tetris.lab`.
@@ -106,3 +117,6 @@ v `SPEC.md` jsou požadavky na ověření, nikoli tvrzení o existujícím pokry
   Obě přerušení musí začínat výpočty s vyčištěným decimal flagem.
 - `RenderGame` a další rutiny přepisují `tmp*`, ukazatele a `celly`.
   Dlouhé sekvence přes tato volání drží čítače v `SeqCnt`/`SeqRow`.
+  Zvuk ve VBI používá výhradně vlastní ZP ukazatel `SndRead` a původní kanál
+  ukládá na zásobník. Nikdy v něm nepoužívej pracovní `ptr/ptr2/tmp*` hlavního
+  programu bez jejich úplného uchování; `SEI` před NMI nechrání.

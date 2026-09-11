@@ -1,16 +1,16 @@
 ; =====================================================================
 ;  TETRIS pro Atari XL/XE (6502, MADS assembler)
 ;
-;  - Uvodni obrazovka + menu (start, volba levelu, obtiznost BASIC/EXPERT)
+;  - Uvodni obrazovka + menu (start, level, EASY/ADVANCED/EXPERT)
 ;  - Po ~15 s necinnosti v menu se spusti DEMO (AI simuluje prumerneho
-;    hrace); jakykoliv vstup (joystick, klavesa, START/SELECT/OPTION)
+;    hrace); mapovany vstup (joystick, klavesa, START/SELECT/OPTION)
 ;    demo ukonci a vrati se do menu.
 ;  - Herni obrazovka: Graphics 0 (ANTIC mode 2) s vlastnim display listem
 ;    26 radku, studna 10x24 z tenkych car, kostky = plny blok, panel vpravo
 ;    (NEXT, LEVEL, SCORE, LINES, ROWS, TIME), napoveda vlevo. Barvy pres
 ;    PMG "filtr" nad textem (konstanty COL_* nize) - viz HANDOFF.md.
 ;  - Level = rychlost + cil v radcich (ROWS x/y). ADVANCED a EXPERT zacinaji
-;    kazdy level se startovnimi strukturami cihel (PatternTab), EXPERT navic
+;    kazdy level se startovnimi strukturami cihel (PatternLo/Hi), EXPERT navic
 ;    neukazuje NEXT. EASY = prazdna plocha, NEXT viditelny.
 ;  - Zvuky: pohyb, rotace, drop, mazani rad, fanfara, game over.
 ;
@@ -113,6 +113,10 @@ G_VLINE    = $7C
 ; ---------------------------------------------------------------------
 BW        = 10             ; sirka plochy
 BH        = 24             ; vyska plochy (radku)
+BOARD_SIZE = BW*BH
+        ert BOARD_SIZE > 255
+        ert BW <> 10        ; RowOff10 a layout jsou pro studnu 10x24
+        ert BH <> 24
 EMPTY     = 8              ; prazdna bunka
 WHITE     = 7              ; znacka "blikajici rada" (kresli se jako prazdno)
 SK_EASY   = 0
@@ -142,17 +146,19 @@ SOFT_RATE = 2              ; soft drop: 1 bunka za 2 snimky
 IDLE_LO   = <750           ; ~15 s necinnosti -> demo (PAL 50 Hz)
 IDLE_HI   = >750
 AI_DELAY  = 6              ; zakladni tempo tahu AI (snimky)
-AI_THINK  = 14             ; "premysleni" po spawnu
+AI_THINK  = 14             ; cekani po dokonceni hledani
 
 ST_SPAWN  = 0
 ST_FALL   = 1
 ST_CLEAR  = 2
+ST_PLAN   = 3              ; demo: nejvyse jeden kandidat AI za krok
 
 MSG_NORMAL = 0
 MSG_DEMO   = 1
 MSG_PAUSED = 2
 MSG_LEVEL  = 3
 MSG_OVER   = 4
+MSG_OVER_DEMO = 5           ; pouze klic cache zpravy
 
 ; sfx id
 SFX_MOVE   = 0
@@ -182,13 +188,13 @@ tmp4      .byte 0
 cellx     .byte 0
 celly     .byte 0
 FrameCnt  .byte 0
-DliCnt    .byte 0
 DliMode   .byte 0          ; 0 = titulni obrazovka (duha), 1 = hra
 DliModeReq .byte 0         ; pozadovany rezim (prebira VBI spolu s DL)
 TxtOr     .byte 0          ; maska OR pro PutStr (inverze / barva mode 6)
 TestX     .byte 0
 TestY     .byte 0
 TestRot   .byte 0
+SndRead   .byte 0,0        ; soukromy ukazatel VBI, nikdy ptr/ptr2 hlavniho kodu
 
 ; ---------------------------------------------------------------------
 ;  Makra
@@ -250,6 +256,10 @@ AbortFlag .byte 0
 GameOverFlag .byte 0
 MsgId     .byte 0
 NextDirty .byte 0
+BoardDirty .byte 1
+ValuesDirty .byte 1
+LastMsgStamp .byte $FF
+LastDemoBlink .byte $FF
 PmOn      .byte 0          ; 1 = PMG podbarveni zapnuto (herni obrazovka)
 RowsInLevel .byte 0        ; smazane rady v aktualnim levelu (binarne)
 RowsTarget .byte 0         ; cil levelu
@@ -281,6 +291,8 @@ AiX       .byte 0
 AiHard    .byte 0
 AiTimer   .byte 0
 AiPhase   .byte 0          ; 0 = rotuj/posun, 1 = drzi dolu
+AiSearchX .byte 0          ; rozpracovane hledani nesmi sdilet Test* s rendererem
+AiSearchRot .byte 0
 BestLo    .byte 0
 BestHi    .byte 0
 BestRot   .byte 0
@@ -296,15 +308,14 @@ Bump      .byte 0
 MaxH      .byte 0
 
 CellIdx   .byte 0,0,0,0
-RowBuf    :10 .byte 0
 
 SndPtrLo  .byte 0,0,0,0
 SndPtrHi  .byte 0,0,0,0
 SndCnt    .byte 0,0,0,0
 
-Board     :240 .byte EMPTY
-Comp      :240 .byte EMPTY
-PrevComp  :240 .byte $FF   ; naposledy vykresleny stav (pro preskoceni nezmenenych radku)
+Board     :BOARD_SIZE .byte EMPTY
+Comp      :BOARD_SIZE .byte EMPTY
+PrevComp  :BOARD_SIZE .byte $FF ; naposledy vykresleny stav
 
 ; ---------------------------------------------------------------------
 ;  Tabulky
@@ -342,7 +353,7 @@ SpeedTab  .byte 0,40,36,32,28,24,20,17,14,12,10,8,7,6,5,4,4,3,3,2,2
 TargetTab .byte 0,5,7,9,11,12,13,14,15,16,17,18,18,19,19,20,20,20,20,20,20
 
 ; startovni struktury (ADVANCED/EXPERT): pocet radku, pak radky shora dolu,
-; 10 znaku, '#' = cihla. Zrcadlove symetricke, nikdy plna rada.
+; 10 znaku, '#' = cihla. Nikdy plna rada, nektere rady jsou asymetricke.
 PatternLo .byte 0,<Pat1,<Pat2,<Pat3,<Pat4,<Pat5,<Pat6,<Pat7,<Pat8,<Pat9,<Pat10,<Pat11,<Pat12
 PatternHi .byte 0,>Pat1,>Pat2,>Pat3,>Pat4,>Pat5,>Pat6,>Pat7,>Pat8,>Pat9,>Pat10,>Pat11,>Pat12
 Pat1    .byte 1
@@ -490,7 +501,6 @@ TxtW3     dta d'WAIT A WHILE TO WATCH THE DEMO',$FF
 TxtH0     dta d'STICK/ARROWS MOVE     FIRE/UP/Z ROTATE',$FF
 TxtH1     dta d'DOWN SOFT DROP        SPACE HARD DROP',$FF
 TxtH2     dta d'SELECT LEVEL   OPTION SKILL   ESC MENU',$FF
-TxtH3     dta d'PRESS START OR FIRE TO PLAY',$FF
 TxtCr     dta d'(C) 2026 BYPS - MADS ASSEMBLER',$FF
 TxtNext   dta d'NEXT',$FF
 TxtLevel  dta d'LEVEL',$FF
@@ -804,15 +814,15 @@ SN_exp  lda #<TxtSkill2
         sta ptr+1
         rts
 
-; vykresli tri polozky menu (mode 6), vybrana bile s sipkou
+; vykresli ctyri polozky menu (mode 6), vybrana bile s sipkou
 DrawMenuItems
         ldx #0
         jsr MenuItemColor
-        jsr ClearItem0
+        jsr ClearMenuItem
         PUTS MENU_IT0+3, TxtItem0
         ldx #1
         jsr MenuItemColor
-        jsr ClearItem1
+        jsr ClearMenuItem
         PUTS MENU_IT1+3, TxtItem1
         lda MenuLevel
         ldy #0
@@ -827,7 +837,7 @@ DrawMenuItems
         sta MENU_IT1+13
         ldx #2
         jsr MenuItemColor
-        jsr ClearItem2
+        jsr ClearMenuItem
         PUTS MENU_IT2+3, TxtItem2
         jsr SkillName
         lda #<(MENU_IT2+12)
@@ -837,7 +847,7 @@ DrawMenuItems
         jsr PutStr
         ldx #3
         jsr MenuItemColor
-        jsr ClearItem3
+        jsr ClearMenuItem
         PUTS MENU_IT3+3, TxtItem3
         ; sipka na vybranou polozku (blika)
         lda FrameCnt
@@ -868,37 +878,23 @@ MenuItemColor
 MIC_s   sta TxtOr
         rts
 
-ClearItem0
+; X = polozka 0..3, TxtOr zustava beze zmeny
+ClearMenuItem
+        lda MenuItemLo,x
+        sta ptr2
+        lda MenuItemHi,x
+        sta ptr2+1
         ldy #19
         lda #0
-CI0     sta MENU_IT0,y
+CMI_l   sta (ptr2),y
         dey
-        bpl CI0
+        bpl CMI_l
         rts
-ClearItem1
-        ldy #19
-        lda #0
-CI1     sta MENU_IT1,y
-        dey
-        bpl CI1
-        rts
-ClearItem2
-        ldy #19
-        lda #0
-CI2     sta MENU_IT2,y
-        dey
-        bpl CI2
-        rts
-ClearItem3
-        ldy #19
-        lda #0
-CI3     sta MENU_IT3,y
-        dey
-        bpl CI3
-        rts
+MenuItemLo .byte <MENU_IT0,<MENU_IT1,<MENU_IT2,<MENU_IT3
+MenuItemHi .byte >MENU_IT0,>MENU_IT1,>MENU_IT2,>MENU_IT3
 
 ; ---------------------------------------------------------------------
-;  HELP obrazovka (pouziva herni DL bez PMG); vraci po libovolnem vstupu
+;  HELP obrazovka (herni DL bez PMG); vraci po mapovanem vstupu
 ; ---------------------------------------------------------------------
 HelpScreen
         jsr ClearGameScr
@@ -1080,6 +1076,9 @@ InitGame
 
 ; priprava levelu: rychlost, cil radku, startovni struktury
 StartLevel
+        lda #1
+        sta ValuesDirty
+        sta BoardDirty
         ldx Level
         lda SpeedTab,x
         sta GravSpeed
@@ -1092,7 +1091,9 @@ StartLevel
         rts
 
 ClearBoard
-        ldy #239
+        lda #1
+        sta BoardDirty
+        ldy #BOARD_SIZE-1
         lda #EMPTY
 CB_l    sta Board,y
         dey
@@ -1253,7 +1254,9 @@ FS_2    lda DevMode
         beq FS_devN
         cmp #KEY_G
         beq FS_devG
-FS_2b   lda InNew
+FS_2b   lda GameOverFlag     ; game over prijima potvrzeni/ESC, ne pauzu
+        bne FS_done
+        lda InNew
         and #IN_PAUSE
         bne FS_tog
         lda ConsNew
@@ -1287,6 +1290,8 @@ FS_done ; herni cas (bezi mimo pauzu a game over)
         adc #1
         sta TimeMin
 FS_tc   cld
+        lda #1
+        sta ValuesDirty
 FS_t    rts
 FS_devN ; dev: skok na dalsi level
         lda Level
@@ -1300,6 +1305,8 @@ FS_dn1  jsr ClearBoard
         SFX SFX_SELECT
         jmp FS_done
 FS_devG ; dev: vynutit game over (zaplni horni dva radky)
+        lda #1
+        sta BoardDirty
         ldy #19
         lda #1
 FS_dg   sta Board,y
@@ -1317,7 +1324,15 @@ StateStep
         beq StSpawn
         cmp #ST_FALL
         beq StFall
+        cmp #ST_PLAN
+        beq StPlan
         jmp StClear
+
+StPlan  jsr AiPlanStep
+        bcc SP_wait
+        lda #ST_FALL
+        sta State
+SP_wait rts
 
 ; ---- novy kus ----
 StSpawn
@@ -1327,6 +1342,7 @@ StSpawn
         sta NextType
         lda #1
         sta NextDirty
+        sta BoardDirty
         lda #0
         sta CurRot
         sta CurY
@@ -1346,6 +1362,8 @@ SS_ok   lda GravSpeed
         lda Demo
         beq SS_done
         jsr AiPlan
+        lda #ST_PLAN
+        sta State
 SS_done rts
 
 ; ---- kus pada ----
@@ -1437,7 +1455,12 @@ StClear
         lsr
         lsr
         and #1
+        cmp FlashPhase
+        beq SC_phase
         sta FlashPhase
+        lda #1
+        sta BoardDirty
+SC_phase
         lda FlashCnt
         cmp #24
         bcc SC_done
@@ -1496,6 +1519,8 @@ TryMove
         bcc TM_fail
         lda TestX
         sta CurX
+        lda #1
+        sta BoardDirty
         SFX SFX_MOVE
 TM_fail rts
 
@@ -1507,6 +1532,8 @@ TryDown
         bcc TD_fail
         lda TestY
         sta CurY
+        lda #1
+        sta BoardDirty
         sec
         rts
 TD_fail clc
@@ -1538,6 +1565,8 @@ TR_ok   lda TestX
         sta CurX
         lda TestRot
         sta CurRot
+        lda #1
+        sta BoardDirty
         SFX SFX_ROT
         rts
 
@@ -1660,6 +1689,8 @@ PC_l    ldy CellIdx,x
 ;  Zamknuti kusu do plochy
 ; ---------------------------------------------------------------------
 LockPiece
+        lda #1
+        sta BoardDirty
         jsr CurToTest
         jsr CalcCells
         lda CurType
@@ -1721,6 +1752,8 @@ FF_next inc celly
 
 ; odstrani plne rady (vzestupne), vse nad nimi sesedne
 RemoveFullRows
+        lda #1
+        sta BoardDirty
         lda #0
         sta tmp4
 RFR_l   lda tmp4
@@ -1802,6 +1835,8 @@ AddScore
         adc #0
         sta Score+2
         cld
+        lda #1
+        sta ValuesDirty
         rts
 
 ; ---------------------------------------------------------------------
@@ -1829,6 +1864,8 @@ LDS_l   jsr FrameStep
         lda AbortFlag
         bne LDS_x
         jsr RenderGame
+        lda Paused
+        bne LDS_l
         dec SeqCnt
         bne LDS_l
         lda Level
@@ -1854,6 +1891,8 @@ GameOverSeq
         lda #BH-1
         sta SeqRow
 GOS_fill
+        lda #1
+        sta BoardDirty
         ldx SeqRow
         ldy RowOff10,x
         ldx #BW
@@ -1904,10 +1943,19 @@ AiPlan
         lda #3
         sta BestX
         lda #0
+        sta AiSearchRot
+        lda #$FE
+        sta AiSearchX
+        rts
+
+; Nejvyse jeden kandidat. Pred navratem je Board opet beze zmeny.
+; C=1 hledani hotovo, C=0 pokracovat v dalsim snimku.
+AiPlanStep
+        lda AiSearchRot
         sta TestRot
-AP_rot  lda #$FE
+        lda AiSearchX
         sta TestX
-AP_x    lda #0
+        lda #0
         sta TestY
         jsr Fits
         bcc AP_nextx
@@ -1947,15 +1995,17 @@ AP_better
         lda TestX
         sta BestX
 AP_nextx
-        inc TestX
-        lda TestX
+        inc AiSearchX
+        lda AiSearchX
         cmp #BW
-        bne AP_x
-        inc TestRot
+        bne AP_pending
+        lda #$FE
+        sta AiSearchX
+        inc AiSearchRot
         ldx CurType
-        lda TestRot
+        lda AiSearchRot
         cmp RotCount,x
-        bcc AP_rot
+        bcc AP_pending
         lda BestRot
         sta AiRot
         lda BestX
@@ -1967,6 +2017,10 @@ AP_nextx
         sta AiTimer
         lda #0
         sta AiPhase
+        sec
+        rts
+AP_pending
+        clc
         rts
 
 ; ohodnoceni plochy -> EvalLo/Hi (nizsi = lepsi)
@@ -2162,7 +2216,13 @@ AS_out  sta InRaw
 ; =====================================================================
 SetGameScreen
         jsr ClearGameScr
-        ldy #239
+        lda #1
+        sta BoardDirty
+        sta ValuesDirty
+        lda #$FF
+        sta LastMsgStamp
+        sta LastDemoBlink
+        ldy #BOARD_SIZE-1
         lda #$FF
 SGS_p   sta PrevComp,y
         dey
@@ -2346,17 +2406,30 @@ IP_2    lda #$FF
         rts
 
 RenderGame
+        lda BoardDirty
+        beq RG_next
+        lda #0
+        sta BoardDirty
         jsr BuildComp
         jsr DrawBoard
-        lda NextDirty
+RG_next lda NextDirty
         beq RG_n
         lda #0
         sta NextDirty
         jsr DrawNext
-RG_n    jsr DrawValues
-        jsr DrawMessage
+RG_n    lda ValuesDirty
+        beq RG_msg
+        lda #0
+        sta ValuesDirty
+        jsr DrawValues
+RG_msg  jsr DrawMessage
         lda Demo
         beq RG_d
+        lda FrameCnt
+        and #$10
+        cmp LastDemoBlink
+        beq RG_d
+        sta LastDemoBlink
         jsr BlinkOr
         PUTS GAMESCR+0*40+HINT_COL, TxtDemo
         lda #0
@@ -2365,7 +2438,7 @@ RG_d    rts
 
 ; Comp = Board + padajici kus / blikajici rady
 BuildComp
-        ldy #239
+        ldy #BOARD_SIZE-1
 BC_l    lda Board,y
         sta Comp,y
         dey
@@ -2373,7 +2446,10 @@ BC_l    lda Board,y
         bne BC_l
         lda State
         cmp #ST_FALL
+        beq BC_piece
+        cmp #ST_PLAN
         bne BC_clear
+BC_piece
         jsr CurToTest
         jsr CalcCells
         ldx #3
@@ -2663,6 +2739,39 @@ B2D_d   sta tmp3
 
 ; radek hlasek (MSG_ROW)
 DrawMessage
+        ; Efektivni zprava + faze blikani; stabilni text se neprepisuje.
+        lda Paused
+        beq DMC_active
+        lda #MSG_PAUSED
+        bne DMC_key
+DMC_active
+        lda MsgId
+        cmp #MSG_LEVEL
+        beq DMC_flash
+        cmp #MSG_OVER
+        beq DMC_over
+        lda Demo
+        beq DMC_key
+        lda #MSG_DEMO
+        bne DMC_flash
+DMC_over
+        lda Demo
+        beq DMC_overp
+        lda #MSG_OVER_DEMO
+        bne DMC_key
+DMC_overp
+        lda #MSG_OVER
+        bne DMC_key
+DMC_flash
+        sta tmp
+        lda FrameCnt
+        and #$10
+        ora tmp
+DMC_key cmp LastMsgStamp
+        bne DMC_draw
+        rts
+DMC_draw
+        sta LastMsgStamp
         ldy #39
         lda #0
 DM_c    sta MSG_ADDR,y
@@ -2835,25 +2944,25 @@ ST_ch   lda SndPtrHi,x
         dec SndCnt,x
         jmp ST_next
 ST_load lda SndPtrLo,x
-        sta ptr2
+        sta SndRead
         lda SndPtrHi,x
-        sta ptr2+1
+        sta SndRead+1
         ldy #2
-        lda (ptr2),y
+        lda (SndRead),y
         beq ST_end
         sta SndCnt,x
         txa
+        pha                        ; puvodni kanal patri na zasobnik VBI
         asl
-        tay
-        stx tmp4
         tax
         ldy #0
-        lda (ptr2),y
+        lda (SndRead),y
         sta AUDF1,x
         iny
-        lda (ptr2),y
+        lda (SndRead),y
         sta AUDC1,x
-        ldx tmp4
+        pla
+        tax
         lda SndPtrLo,x
         clc
         adc #3
@@ -2908,8 +3017,6 @@ Vbi
         sta DliMode
         lda #$E0
         sta CHBASE
-        lda #0
-        sta DliCnt
         lda PmOn
         beq V_pmoff
         lda #$3E                    ; DL + player/missile DMA, single-line
@@ -3017,12 +3124,13 @@ PS_e    rts
 ; =====================================================================
 ;  Display listy
 ; =====================================================================
+        ert * > PMAREA              ; kod/data nesmeji zasahnout do PMG
         org $7000
 GameDL
         .byte $70                   ; 8 prazdnych linek nahore
         .byte $42
         dta a(GAMESCR)              ; radek 0
-        :25 .byte $02               ; radky 1..25
+        :GROWS-1 .byte $02           ; radky 1..25
         .byte $41
         dta a(GameDL)
 

@@ -14,12 +14,14 @@ Vyžaduje MADS v `PATH`. Z adresáře `src/tetris` v PowerShellu:
 
 ```powershell
 ./make.bat
+./make.bat game     # pouze hra a labely, bez prototypu
 # Pouze hra (včetně labelů pro harness):
 mads tetris.asm -o:tetris.xex -t:tetris.lab
 ```
 
-`make.bat` sestavuje hru i tři prototypy `design*.xex`. Kontroluj výstup každého
-překladu: skript se při chybě nezastaví a poslední úspěšný příkaz ji může zakrýt.
+`make.bat` sestavuje hru i tři prototypy `design*.xex`; argument `game` sestaví
+jen hru a labely. Skript pracuje ve svém adresáři a po první chybě se ukončí
+s nenulovým návratovým kódem.
 
 Výsledek `tetris.xex` je určen pro Atari XL/XE s OS ROM, načtený XEX loaderem
 na skutečném stroji nebo v emulátoru. Hra přímo řídí grafiku, zvuk a vstupy,
@@ -57,6 +59,8 @@ jejich mapování na klávesnici počítače záleží na emulátoru.
   díry / nerovnost / smazané řady + náhodný šum) hraje jako průměrný hráč
   lidským tempem. Blikající nápis DEMO nad nápovědou a hláška dole. Jakýkoliv
   namapovaný herní vstup nebo START/SELECT/OPTION demo ukončí; ostatní klávesy ne.
+  AI vyhodnocuje nejvýše jednu polohu dílku za herní krok; během hledání
+  se čtou vstupy a běží čas. Kus začne padat po dokončení hledání.
 - **Herní obrazovka** – Graphics 0 (ANTIC mode 2) s vlastním display listem
   26 řádků: studna 10×24 z tenkých čar uprostřed, kostky = plný blok, vpravo
   NEXT (6×6 rámeček, dílek 1:1 ve spawn rotaci), LEVEL, SCORE, LINES, ROWS x/y,
@@ -77,6 +81,8 @@ jejich mapování na klávesnici počítače záleží na emulátoru.
   odspodu zaplní, čeká se na FIRE, nahoru, mezerník nebo START (platí i
   klávesové ekvivalenty). ESC vrací do menu; demo se vrátí samo.
 - **Zvuky** – POKEY, 4 kanály, jednoduchý sekvencer v VBI (`SoundTick`).
+- **Pauza** – P/START zastaví běžnou hru i odpočet dokončení levelu.
+  Game over pauzu nepřijímá; přijímá potvrzení a ESC.
 
 ## Vývojářský režim
 
@@ -89,7 +95,7 @@ klávesy nic nedělají.
 
 | Oblast          | Adresa        | Obsah                                   |
 |-----------------|---------------|-----------------------------------------|
-| ZP              | $80–$91       | ukazatele, dočasné proměnné, čítač snímků |
+| ZP              | $80–$92       | ukazatele, dočasné proměnné, čítač snímků |
 | kód + data      | od $2000, pod $5000 | program, tabulky, `Board`/`Comp`/`PrevComp` |
 | PMG             | $5000–$57FF   | hráči P0–P3 (single-line)               |
 | herní obrazovka | $6000–$640F   | 26 řádků × 40 (mode 2), i HELP          |
@@ -127,18 +133,21 @@ python emu.py 120 out.png        # 120 snímků a screenshot
 python test_game.py              # menu, help, hra, level, ADVANCED, EXPERT, pauza, ESC, game over, demo
 ```
 
-`test_game.py` vypisuje stavy a ukládá `out_n_*.png` včetně přehledu
-`out_n_sheet.png` do pracovního adresáře. Nemá aserce herního chování:
-návratový kód 0 znamená dokončení scénáře, výpisy a obrázky je nutné posoudit.
-Vývojářský režim tento skript neověřuje. Pro jeho skriptované zapnutí nastav
+`test_game.py` kontroluje herní stavy, soulad studny s obrazovkou, pauzu,
+levely, EXPERT a návraty z obrazovek. Ukládá `out_n_*.png` včetně přehledu
+`out_n_sheet.png` do pracovního adresáře. Při úspěchu vypíše `ALL OK` a vrátí 0;
+při nesplněné podmínce skončí chybou. Obrázky doplňují tyto kontroly.
+Vývojářský režim ověřuje `audit_tetris.py`. Pro jeho skriptované zapnutí nastav
 `m.set_consol(option=True)` ještě před prvním `m.run(...)` a pak OPTION uvolni.
 
 Generované `*.xex`, `*.lst`, `*.lab` a `tools/out*.png` jsou ignorované Gitem.
 Harness používá také sousední Snake (`../snake/test_snake.py`); při změně
 sdíleného emulátoru zohledni i jeho testy.
 
-[REVIEW.md](REVIEW.md) obsahuje nálezy kontroly zdroje a návrhy oprav.
+[REVIEW.md](REVIEW.md) obsahuje nálezy kontroly zdroje, provedené opravy a výsledky.
 Po úspěšném buildu lze z `src/tetris` spustit `python tools/audit_tetris.py`:
 provádí cílené kontroly, vypíše důkazy v JSON a při zjištěných problémech
-vrátí kód 1. Na současné verzi reprodukuje mimo jiné chybu sdílených
-dočasných proměnných ve VBI; neznamená to, že jsou nálezy už opravené.
+vrátí kód 1. Kontroluje také ochranu paměti při VBI, úplné zvukové sekvence,
+omezené kroky AI, vývojářský režim a různé fáze přerušení.
+`python tools/test_build.py` ověří řízení `make.bat` včetně chyb překladače
+v dočasném adresáři, bez změny skutečných výstupů hry.
