@@ -67,7 +67,9 @@ jejich mapování na klávesnici počítače záleží na emulátoru.
 - **Herní obrazovka** – Graphics 0 (ANTIC mode 2) s vlastním display listem
   26 řádků: studna 10×24 z tenkých čar uprostřed, kostky = plný blok, vpravo
   NEXT (6×6 rámeček, dílek 1:1 ve spawn rotaci), LEVEL, SCORE, LINES, ROWS x/y,
-  TIME; vlevo nápověda ovládání. P0/P1 podbarvují nápovědu/panel. Aktivní
+  TIME; vlevo nápověda ovládání a obtížnost (EASY / ADV. / EXPERT).
+  Zkratka ADV. se vejde do zeleného pruhu; menu a HELP uvádějí ADVANCED.
+  P0/P1 podbarvují nápovědu/panel. Aktivní
   kostku kreslí P2 a NEXT kreslí P3 v barvě podle typu: I tyrkysová, O žlutá,
   T fialová, S zelená, Z červená, J modrá, L oranžová (`PieceCol`). Usazené
   kostky jsou šedé. Herní display list nemá DLI; duha patří titulku/menu.

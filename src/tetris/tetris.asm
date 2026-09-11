@@ -514,6 +514,7 @@ TxtItem2  dta d'SKILL',$FF
 TxtItem3  dta d'HELP',$FF
 TxtSkill0 dta d'EASY    ',$FF
 TxtSkill1 dta d'ADVANCED',$FF
+TxtSkillAdvHud dta d'ADV.',$FF
 TxtSkill2 dta d'EXPERT  ',$FF
 TxtArrow  dta d'>',$FF
 TxtW0     dta d'CLASSIC TETRIS FOR ATARI XL/XE',$FF
@@ -2486,6 +2487,14 @@ SGS_nn  ; panel
         beq SGS_nd
         PUTS GAMESCR+24*40+HINT_COL, TxtDev
 SGS_nd  jsr SkillName
+        lda MenuSkill
+        cmp #SK_ADV
+        bne SGS_skill
+        lda #<TxtSkillAdvHud         ; full name overflows the 8-column P0 strip
+        sta ptr
+        lda #>TxtSkillAdvHud
+        sta ptr+1
+SGS_skill
         lda #<(GAMESCR+22*40+HINT_COL)
         sta ptr2
         lda #>(GAMESCR+22*40+HINT_COL)

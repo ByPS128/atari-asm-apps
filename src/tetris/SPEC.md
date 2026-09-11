@@ -254,7 +254,7 @@ nulované, vztahují se k textu a nezahrnují horní prázdný pás.
 | HARD / SPACE | 2 / 3 | 11 / 12 |
 | PAUSE / P | 2 / 3 | 14 / 15 |
 | MENU / ESC | 2 / 3 | 17 / 18 |
-| EASY, ADVANCED nebo EXPERT | 2 | 22 |
+| EASY, ADV. nebo EXPERT | 2 | 22 |
 | DEMO (jen při demu) | 2 | 0 |
 | DEV (jen v DEV) | 2 | 24 |
 | Zpráva demo / pauza / level / game over | 1 / 6 / 7 / 4 | 25 |
@@ -267,6 +267,8 @@ plný blok `$80`, rohy levý horní `$51`, pravý horní `$45`, levý dolní `$5
 pravý dolní `$43`, vodorovná `$52`, svislá `$7C`.
 
 NEXT vycentrovat podle skutečného ohraničujícího obdélníku rotace 0.
+Obtížnost ADVANCED v herním panelu zkrátit na ADV., aby s odsazením
+nepřetékala z osmiznakového pruhu PMG. V menu a HELPu ponechat celý název.
 V každé ose platí odsazení `floor((4-velikost)/2)` od vnitřního okraje.
 Nevykreslovat větší buňky než ve studni. ROWS ukazuje dvě číslice, lomítko
 a dvě číslice cíle, LEVEL dvě číslice, TIME mm:ss.

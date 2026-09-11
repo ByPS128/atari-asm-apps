@@ -43,11 +43,12 @@ Pokyny v AGENTS nyní vyžadují kontrolu větví a upstreamu před zahájením 
 | Blikání pauzy + cache | Klíč zprávy obsahuje bit `$20` pro PAUSED, `$10` pro DEMO/level | Přepínání PAUSED po 32 snímcích |
 | Animované skóre + cache | ScoreTick běží každý aktivní krok blikání, ScoreLines invaliduje panel | Body rostou v přesných intervalech, správné počítadlo řad a konečná suma |
 | Build | Hra přes make.bat, čtyři prototypy přes design/make.bat; oba končí po chybě | 5 testů, chyby každého z 5 překladů a cesty s mezerami |
+| Přesah názvu obtížnosti z P0 | Jen herní panel používá ADV.; menu a HELP zachovávají ADVANCED | Screenshot ADVANCED: celý text uvnitř zeleného pruhu |
 
 Zůstává sjednocené mazání položek menu, odstranění mrtvých dat a aserce
 rozměrů/hranice paměti. Hledání AI na prázdné ploše má nejdelší krok
 5 697 instrukcí; celkový objem hledání se podstatně nezmenšil.
-XEX této spojené verze má 10 663 bajtů. Počty instrukcí nejsou měřením
+XEX po úpravě názvu obtížnosti má 10 683 bajtů. Počty instrukcí nejsou měřením
 cyklů na Atari; VBI dál obsluhuje PMG i při nezměněném textovém obrazu.
 
 ## Provedené ověření

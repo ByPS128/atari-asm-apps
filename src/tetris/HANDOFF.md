@@ -36,6 +36,8 @@ Hra používá font z ROM, žádný z obou include souborů nenačítá.
 - Nápověda: akce ve sloupci 2, ovládání ve sloupci 3; MOVE/STICK řádky 2/3,
   ROTATE/FIRE 5/6, DROP/DOWN 8/9, HARD/SPACE 11/12, PAUSE/P 14/15,
   MENU/ESC 17/18. Obtížnost je na řádku 22, DEV na řádku 24.
+  Herní panel používá EASY / ADV. / EXPERT, aby se text s odsazením vešel
+  do osmiznakového pruhu P0. Menu a HELP zachovávají celý název ADVANCED.
   Demo bliká na řádku 0 nad nápovědou, zprávy jsou na řádku 25.
 - PMG single-line používá oblast `$5000–$57FF`, hráče P0–P3 na `$5400–$5700`.
   P0 quad podbarvuje nápovědu, P1 quad panel; P2 double kreslí aktivní kostku,
