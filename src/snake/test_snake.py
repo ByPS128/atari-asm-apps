@@ -182,7 +182,6 @@ def main():
           and all(g in range(GL, GL+6) for g in glyphs[1:-1]), 'hra: po sezrani jedna hlava, tela, jeden ocas')
     check(len(apples(m)) == 1 and sprite_ok(m, *apples(m)[0]), 'hra: nove jablko i se spritem')
     check(sum(m.mem[P0DATA:P0DATA+512]) == 0x60*2 + 0xF0*4 + 0x20 + 0xE0, 'hra: stary sprite jablka zmizel')
-    check(any(a == 1 and v == 0x84 for _, a, v in m.pokey_log), 'hra: zvuk pri sezrani (krup)')
     m.screenshot(os.path.join(HERE, 'out_game.png'))
 
     # naraz do zdi -> GAME OVER
@@ -227,6 +226,7 @@ def main():
     ax, ay = apples(m)[0]
     m.mem[0x3000 + ay*40 + ax] = 0
     m.mem[0x3000 + 12*40 + 22] = APPLE
+    eat_log_start = len(m.pokey_log)
     for _ in range(40):
         m.run(1)
         if var(m, 'Score'):
@@ -235,6 +235,17 @@ def main():
     glyphs = [cell(m, x, y) for x, y in segs]
     check(segs == [(22, 12), (21, 12), (20, 12), (19, 12)] and glyphs == [GL+7, GL+0, GL+0, GL+11],
           'hra: hned po sezrani je byvaly ocas prekresleny na telo (ne dva ocasy)')
+    # Presny prubeh schvaleneho out_eat.wav: frekvence, barva, hlasitost a casovani.
+    m.run(8)
+    eat = [(f, a, v) for f, a, v in m.pokey_log[eat_log_start:] if a in (0, 1)]
+    if eat:
+        first_frame = eat[0][0]
+        eat = [(f-first_frame, a, v) for f, a, v in eat]
+    tones = [(0x60, 0xA8), (0x60, 0xA8), (0x40, 0xA8),
+             (0x40, 0xA8), (0x30, 0xA6), (0x30, 0xA4)]
+    expected = [(f, a, v) for f, tone in enumerate(tones) for a, v in enumerate(tone)]
+    expected.append((6, 1, 0))
+    check(eat == expected, 'hra: stoupavy blip 2+2+1+1 snimku, hlasitost 8/8/6/4, pak ticho')
     print('ALL OK, frames', m.frame)
 
 
