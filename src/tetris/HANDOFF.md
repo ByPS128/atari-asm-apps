@@ -12,9 +12,10 @@ Hra je implementovaná v `tetris.asm` (6502, MADS): titulní obrazovka, menu,
 HELP, tři obtížnosti, levely s cílem řádků, AI demo, pauza a zvuky POKEY.
 Přenos rozvržení Graphics 0 a nového modelu levelů je hotový.
 
-`design.asm` (GTIA 10, `font35.inc`), `design2.asm` (ANTIC mode 4 + PMG,
-`charset4.inc`) a `design3.asm` (Graphics 0) jsou samostatné statické prototypy.
-Rozvržení hry vychází z `design3.asm`, přesné pozice a barvy určuje `tetris.asm`.
+V `design/` jsou čtyři statické prototypy: `design.asm` (GTIA 10, `font35.inc`),
+`design2.asm` (ANTIC mode 4 + PMG, `charset4.inc`), `design3.asm` (Graphics 0)
+a `design4.asm` (barevná kostka/NEXT). Rozvržení hry vychází z design3,
+barevné kostky z design4; přesné pozice a barvy určuje `tetris.asm`.
 Hra používá font z ROM, žádný z obou include souborů nenačítá.
 
 ## Obrazovka a paměť
@@ -23,7 +24,8 @@ Hra používá font z ROM, žádný z obou include souborů nenačítá.
   obsahuje osm prázdných linek, LMS prvního textového řádku, 25 dalších řádků
   a skok na začátek. Nemá DLI bity. `ClearGameScr` maže `$6000–$64FF`,
   tedy více než viditelných 1040 bajtů do `$640F`.
-- ROM znaková sada (`CHBASE=$E0`), kostka = inverzní mezera `$80`, prázdno = 0.
+- ROM znaková sada (`CHBASE=$E0`), usazená kostka = inverzní mezera `$80`,
+  prázdno i aktivní buňky v textu = 0; aktivní kostku vykresluje PMG.
   Studna má 10×24 viditelných buněk ve sloupcích 15–24, řádcích 0–23.
   Stěny jsou ve sloupcích 14 a 25, dno na řádku 24.
 - NEXT: nápis řádek 0/sloupec 32; rám sloupce 31–36, řádky 1–6, vnitřek
@@ -36,14 +38,19 @@ Hra používá font z ROM, žádný z obou include souborů nenačítá.
   MENU/ESC 17/18. Obtížnost je na řádku 22, DEV na řádku 24.
   Demo bliká na řádku 0 nad nápovědou, zprávy jsou na řádku 25.
 - PMG single-line používá oblast `$5000–$57FF`, hráče P0–P3 na `$5400–$5700`.
-  P0 quad podbarvuje nápovědu, P1 quad panel, P2 quad + P3 double studnu.
-  `Vbi` nastavuje `DMACTL=$3E`, `GRACTL=3`, `PRIOR=1` a barvy z `COL_*`:
-  nápověda `$B0`, panel `$20`, studna `$02`, text `$0C`, pozadí `$00`.
-  V hi-res textu se kombinuje odstín hráče s jasem textu. Studna má jednolitou
-  barvu; gradient po řádcích ani tabulka `RowHue` nejsou implementované.
+  P0 quad podbarvuje nápovědu, P1 quad panel; P2 double kreslí aktivní kostku,
+  P3 double NEXT. `Vbi` nastavuje `DMACTL=$3E`, `GRACTL=3`, `PRIOR=1`.
+  Nápověda má `$B0`, panel `$20`, text/usazené buňky `$0C`, pozadí `$00`.
+  `PieceCol` = `$9A,$EE,$48,$B8,$34,$76,$1A` pro I/O/T/S/Z/J/L. Aktivní buňky
+  jsou ve videopaměti prázdné, takže hráč dodává sytou barvu i jas.
+  `UpdatePiecePM` při `BoardDirty` připraví 32 bajtů `PcBuf`, `PcRow`, HPOS
+  a barvu. `DrawNext` při `NextDirty` připraví `NxBuf`, HPOS a barvu.
+  VBI teprve smaže staré řádky P2 a zkopíruje oba buffery do PMG RAM.
+  Zachovat kopírování během VBI: zápis v hlavní smyčce dříve trhal barvu.
 - Titulní obrazovka a menu mají samostatný `MenuDL` na `$7100` a texty od
   `$6A00`. Titulek používá mode 7, podtitul a položky mode 6, nápověda mode 2.
-  DLI vykresluje duhu titulku; HELP používá herní textovou obrazovku bez PMG.
+  DLI vykresluje duhu titulku; HELP má dvě stránky (ovládání a bodování),
+  používá herní textovou obrazovku bez PMG. ESC z obou vrací přímo do menu.
 - ZP je `$80–$92`, kód a data od `$2000` musí zůstat pod PMG na `$5000`.
   Adresy rutin a proměnných ověřuj v čerstvém `tetris.lab`.
 
@@ -65,12 +72,13 @@ Hra používá font z ROM, žádný z obou include souborů nenačítá.
   Žádný vzor nemá plnou řadu, některé řádky nejsou zrcadlově symetrické.
 - `Board`, `Comp`, `PrevComp` mají každý 240 bajtů. `Board` obsahuje usazené
   kostky, `BuildComp` přidává padající kus nebo blikající řady, `DrawBoard`
-  kreslí jen změněné řádky. `EMPTY=8`, `WHITE=7` se vykreslují jako prázdno.
+  kreslí jen změněné řádky. `EMPTY=8`, `WHITE=7` i buňky s bitem `ACTIVE=$10`
+  se vykreslují jako prázdno. P2 je vidět v `ST_FALL` i `ST_PLAN`.
   `BoardDirty`/`ValuesDirty` zabraňují zbytečnému sestavování obrazu a zápisu
   panelu. Zpráva a banner mají cache obsahu/fáze blikání.
 - `StSpawn` připraví kus v rotaci 0 na X=3/Y=0 a kontroluje kolizi;
   `StFall` zpracuje pohyb a pád; `StClear` nechá řady třikrát bliknout během
-  24 snímků, odstraní je, přičte skóre a vyhodnotí cíl levelu.
+  24 snímků, průběžně přičítá skóre, odstraní je a vyhodnotí cíl levelu.
   Demo mezi spawnem a pádem používá `StPlan`, nejvýše jeden kandidát za krok.
   Během hledání se čtou vstupy a běží čas, aktivní dílek zůstává ve spawn poloze.
 - Rotace postupuje o jednu variantu s vodorovnými kicky `0,-1,+1,-2,+2`.
@@ -80,6 +88,12 @@ Hra používá font z ROM, žádný z obou include souborů nenačítá.
   +2 za buňku hard dropu. `Score` má 3 BCD bajty, `Lines` 2 BCD bajty;
   `RowsInLevel`/`RowsTarget` jsou binární. Čas v `FrameStep` počítá 50 snímků
   na sekundu a stojí při pauze/game over; hra neprovádí detekci PAL/NTSC.
+- `StartClearScore`/`StartScoreAnim` připraví bonus v jednotkách 10 bodů.
+  `ScoreTick` jej rozloží rovnoměrně do 24 snímků u řad a 48 u levelu.
+  `ScoreLines` po odstranění řad aktualizuje jejich počítadla a `ValuesDirty`;
+  `AddScore` příznak nastavuje při každém přírůstku. `ScoreFlush` doplatí zbytek.
+  Jen levelový bonus pípá: `ScoreTick` zapisuje `$21/$A8` na kanál 0,
+  jeden snímek tónu každé tři snímky, na konci jej umlčí.
 - Demo začíná po 750 snímcích nečinnosti na titulní obrazovce nebo v menu,
   používá zvolený level a obtížnost. `AiPlan` zahájí hledání,
   `AiPlanStep`/`Evaluate` hodnotí výšky,
@@ -88,7 +102,9 @@ Hra používá font z ROM, žádný z obou include souborů nenačítá.
   libovolná nenamapovaná klávesa demo neukončí.
 - `GameOverSeq` zaplní studnu odspodu a čeká na FIRE, nahoru, hard drop nebo
   START; ESC hru opustí. Demo po zaplnění čeká 150 snímků a vrátí se samo.
-  Game over nepřepíná pauzu; dokončení levelu naopak při pauze drží odpočet.
+  Game over nepřepíná pauzu; dokončení levelu při pauze drží odpočet i stav
+  přičítání bonusu a umlčí jeho pípání. Zpráva PAUSED bliká po 32 snímcích
+  a její cache sleduje bit `$20` čítače, ostatní blikající zprávy bit `$10`.
 
 ## Hardware a vývojové pasti
 
@@ -114,6 +130,9 @@ mads tetris.asm -o:tetris.xex -t:tetris.lab
 # Po úspěšném překladu:
 cd tools
 python test_game.py
+python test_piece_pm.py
+python test_ui.py
+python test_irq.py
 python audit_tetris.py
 python test_build.py
 python emu.py 120 out.png
@@ -125,7 +144,8 @@ Kontroluje stavy i soulad plochy s obrazem; při úspěchu vypíše `ALL OK` a v
 `audit_tetris.py` přidává kontroly kolizí, řad, struktur, VBI, zvukových sekvencí,
 postupného hledání AI, pauzy a DEV. `test_build.py` ověřuje řízení dávkového
 buildu v dočasném adresáři. Skripty herních testů samy nesestavují XEX.
-`make.bat` sestaví i prototypy, `make.bat game` jen hru; první chyba build ukončí.
+`make.bat` sestaví jen hru, `design/make.bat` čtyři prototypy. Oba končí při
+první chybě. Po změně větve sestav XEX i labely znovu.
 
 `tools/emu.py` s `tools/cpu6502.py` modeluje potřebnou část CPU/grafiky,
 DLI/WSYNC a PMG, nahrazuje potřebné chování přerušení OS. POKEY zápisy pouze

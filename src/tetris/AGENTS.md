@@ -13,18 +13,31 @@ Změny pracovních postupů patří sem. Dokumentace má popisovat implementovan
 chování; záměry do budoucna nesměšuj se současným stavem. Přejímací scénáře
 v `SPEC.md` jsou požadavky na ověření, nikoli tvrzení o existujícím pokrytí testy.
 
+## Git a výchozí verze
+
+Před založením opravné větve ověř `git status`, `git branch -avv`, aktualizuj
+reference pomocí `git fetch origin` a porovnej lokální větev s `origin/main`.
+Otevřená lokální `main` nemusí obsahovat nejnovější hru. Ověř také poslední
+commity pro `src/tetris`, zejména při rozporu se vzhledem popsaným uživatelem.
+Nezahazuj místní commity ani rozpracované změny. Po přepnutí či sloučení větví
+znovu sestav XEX a labely; ignorované výstupy Git při checkoutu neaktualizuje.
+
 ## Build a ověření
 
 - Pracuj z `src/tetris`. Hru sestav příkazem
   `mads tetris.asm -o:tetris.xex -t:tetris.lab` (MADS v `PATH`).
-  `./make.bat` sestaví také všechny tři designové prototypy, `./make.bat game`
-  jen hru a labely. Skript se po první chybě zastaví s nenulovým kódem.
+  `./make.bat` sestaví jen hru a labely (`game` je nadále přijímaný argument).
+  Čtyři prototypy sestavuje samostatný `./design/make.bat`. Oba skripty
+  pracují ve svém adresáři a při první chybě končí nenulovým kódem.
 - Před ověřováním změny assembleru úspěšně sestav aktuální XEX i labely.
   Harness sám nepřekládá a staré výstupy neověřují nový kód.
 - Z `tools` spusť `python test_game.py` (Python 3 + Pillow).
   Skript kontroluje herní stavy a soulad studny s obrazovkou, vytváří
   `out_n_*.png` a `out_n_sheet.png`. Úspěch = `ALL OK` a návratový kód 0.
   Po změně vzhledu zkontroluj také relevantní obrázky.
+- Po změně hry spusť také `python test_piece_pm.py`, `python test_ui.py`
+  a `python test_irq.py` z `tools`: barvy a masky P2/P3, HELP, animace skóre,
+  blikání pauzy a přerušení při kreslení textu.
 - Samostatný screenshot: z `tools` spusť `python emu.py 120 out.png`.
   Pro další scénáře použij `Machine`, `load_labels()`, `label()`, `tap()`,
   `set_key()`, `set_stick()`, `set_consol()` a `screenshot()` v `tools/emu.py`.
@@ -44,7 +57,7 @@ v `SPEC.md` jsou požadavky na ověření, nikoli tvrzení o existujícím pokry
   regresní ověření. Audit není náhradou za všechny přejímací scénáře.
 - Po změně hry spusť také audit (včetně DEV a zvukového sekvenceru).
   Po změně buildu spusť `python tools/test_build.py`; test ověřuje zastavení
-  po chybě každého překladu a variantu `game` v izolovaném dočasném adresáři.
+  po chybě každého překladu hry/prototypů a variantu `game` v dočasném adresáři.
 
 ## Architektura a současné mechaniky
 
@@ -54,12 +67,13 @@ v `SPEC.md` jsou požadavky na ověření, nikoli tvrzení o existujícím pokry
 - `Board` = usazené buňky, `Comp` = obraz včetně padajícího kusu/blikání,
   `PrevComp` = poslední vykreslený stav. Každé pole má 240 bajtů (10×24).
   Typy kusů jsou 0–6, `WHITE=7` je značka skryté blikající řady, `EMPTY=8`.
+  Aktivní buňky v `Comp` mají bit `ACTIVE=$10`: v textu jsou prázdné, kreslí je P2.
   Délky polí/smyček používají `BOARD_SIZE`. Aserce MADS hlídají rozměry 10×24
   a osmibitový index; při změně rozměrů uprav i pevné tabulky a rozvržení.
 - EASY má prázdnou studnu a NEXT, ADVANCED struktury a NEXT, EXPERT
   struktury bez celého rámečku NEXT.
 - `SpeedTab` a `TargetTab` určují rychlost a cíl řádků. Po dosažení cíle
-  `LevelDoneSeq` přičte 1000 × level a připraví prázdnou plochu či strukturu
+  `LevelDoneSeq` přičítá 1000 × level po 48 snímků a připraví plochu či strukturu
   dalšího levelu. Maximum je 20 a tento level se opakuje. Menu běžně dovoluje
   1–15; OPTION při startu zapne `DevMode`, výběr 1–20 a klávesy N/G.
 - `FillPattern` vybírá `Pat1`–`Pat12`, nad 12 opakuje vzory 7–12.
@@ -77,7 +91,10 @@ v `SPEC.md` jsou požadavky na ověření, nikoli tvrzení o existujícím pokry
 - `BoardDirty` a `ValuesDirty` nastavuj při změně zobrazovaných dat;
   `SetGameScreen` oba příznaky vynucuje. `RenderGame` stabilní části přeskakuje.
   Cache zprávy/banneru zohledňuje jejich obsah i fázi blikání.
-- Pauza zastavuje i odpočet `LevelDoneSeq`. Game over pauzu ignoruje;
+- Bonusy za řady přičítá `ScoreTick` během 24 snímků blikání, bonus za level
+  během 48 snímků. `ScoreLines` aktualizuje jen počítadla řad a `ValuesDirty`.
+  Napočet levelu pípá na kanálu 0 (1 snímek tón + 2 ticho).
+- Pauza bliká po 32 snímcích a zastavuje odpočet i napočet `LevelDoneSeq`. Game over pauzu ignoruje;
   potvrzení a ESC zůstávají aktivní.
 
 ## Obraz a vazba na OS
@@ -85,11 +102,15 @@ v `SPEC.md` jsou požadavky na ověření, nikoli tvrzení o existujícím pokry
 - Zachovej Graphics 0 (ANTIC mode 2), 26×40 znaků, 24 viditelných řádků
   studny, tenké stěny, plný blok `$80` a NEXT ve spawn rotaci 0 v měřítku 1:1.
   Rozvržení řídí `WELL_COL`, `NEXT_COL`, `PAN_COL`, `HINT_COL`, `MSG_ROW`.
-- Barvy nastavují `COL_*` a PMG ve `Vbi`. Studna je jednolitá (`COL_WELL`);
-  `GameDL` nepoužívá DLI. DLI dělá pouze duhu titulku/menu. Historický návrh
-  gradientu po řádcích není současná implementace.
-- `design3.asm` je reference rozvržení; `design.asm` (GTIA 10 + `font35.inc`)
-  a `design2.asm` (mode 4 + PMG + `charset4.inc`) jsou dřívější prototypy.
+- P0/P1 podbarvují nápovědu/panel. P2 kreslí aktivní dílek v `ST_FALL` i
+  `ST_PLAN`, P3 NEXT, oba v dvojnásobné šířce. `PieceCol` obsahuje barvy
+  I/O/T/S/Z/J/L: `$9A,$EE,$48,$B8,$34,$76,$1A`. Usazené buňky jsou šedé.
+  `UpdatePiecePM` připraví `PcBuf` při `BoardDirty`, `DrawNext` připraví `NxBuf`.
+  Do PMG RAM kopíruje data až VBI; zachovej tuto opravu vykreslování.
+  `GameDL` nepoužívá DLI; DLI dělá pouze duhu titulku/menu.
+- `design/design3.asm` je reference rozvržení, `design/design4.asm` barevných
+  kostek. `design/design.asm` (GTIA 10 + `font35.inc`) a `design/design2.asm`
+  (mode 4 + PMG + `charset4.inc`) jsou dřívější prototypy.
   Hra tyto include soubory nepoužívá. Schválené rozvržení nevracej ke chunky
   písmu, texturovaným kostkám nebo zvětšenému NEXT bez požadavku uživatele.
 - Hra používá `VVBLKI`, `VDSLST`, `XITVBV` a ROM font přes `CHBASE=$E0`.

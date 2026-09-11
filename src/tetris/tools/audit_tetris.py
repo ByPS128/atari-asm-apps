@@ -130,6 +130,11 @@ for level in range(1, 21):
         m = fresh()
         put(m, 'Level', level)
         put(m, 'FullCnt', count)
+        call(m, 'StartClearScore')
+        for frame in range(24):
+            call(m, 'ScoreTick')
+            assert all((v & 15) < 10 and (v >> 4) < 10 for v in m.mem[m.label('Score'):m.label('Score')+3]), ('invalid BCD', level, count, frame)
+        assert m.mem[m.label('ScoreRem'):m.label('ScoreRem')+2] == bytes(2)
         call(m, 'ScoreLines')
         a = m.label('Score')
         assert bcd(m.mem[a:a+3]) == [0, 40, 100, 300, 1200][count]*level
@@ -275,12 +280,12 @@ put(m, 'RowsInLevel', val(m, 'RowsTarget'))
 m.run(5)
 assert val(m, 'MsgId') == 3
 m.tap(key=0x0A)
-before = {n: val(m,n) for n in ['Level','Paused','SeqCnt']}
+before = {n: val(m,n) for n in ['Level','Paused','SeqCnt','ScoreRem','BeepCnt']}
 m.run(160)
-after = {n: val(m,n) for n in ['Level','Paused','SeqCnt']}
+after = {n: val(m,n) for n in ['Level','Paused','SeqCnt','ScoreRem','BeepCnt']}
 RESULT['level_transition_while_paused'] = {'before': before, 'after': after}
 assert before['Paused'] == after['Paused'] == 1
-assert before['SeqCnt'] == after['SeqCnt'], 'paused countdown advanced'
+assert before == after, 'paused countdown or score advanced'
 m.tap(key=0x0A)
 m.run(160)
 assert val(m,'Level') == 2 and val(m,'Paused') == 0, 'level did not resume'

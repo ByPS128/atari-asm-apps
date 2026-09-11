@@ -1,95 +1,101 @@
 # Kontrola a opravy Tetrisu – 11. 9. 2026
 
-Opravy jsou ve větvi `feature/tetris-review-fixes`. Výchozí stav hry,
-dokumentace a reprodukcí nálezů je uložen v commitu `61b7820`.
-Všech pět hlavních nálezů je vyřešených; cílený audit nyní vrací prázdný
-seznam `detected_issues` a návratový kód 0.
+Aktuální práce je ve větvi `feature/tetris-current-review-fixes`: slučuje
+`origin/main` na `199b92c` s dosavadními opravami z `ebe0654`.
+Barevná hra, novější HELP a animované skóre jsou zachované. Zdrojový kód
+je autorita; README, HANDOFF, AGENTS a SPEC popisují tento spojený stav.
 
-## Nálezy a jejich řešení
+## Příčina návratu ke starému vzhledu
 
-| Nález ve výchozím stavu | Provedená oprava | Ověření |
+Předchozí opravy začaly z lokální `main` na `92c29b3`, bez ověření jejího
+vztahu ke vzdálené větvi. Po `git fetch origin` byla tato lokální větev
+2 commity napřed (opravy Snake) a 17 commitů pozadu za `origin/main`.
+Základem revize tedy byla stará šedá hra. Nešlo o ztrátu barev při merge:
+strom Tetrisu v `199b92c` odpovídal poslední barevné větvi na `5bb129b`.
+
+| Funkce zachovaná v historii | Původní commit |
+|---|---|
+| Oprava pádu HELP: samostatná pracovní ZP pro zvuk ve VBI | `418507b` |
+| Barevný aktivní dílek a NEXT přes P2/P3 | `bd223f2` |
+| Přenos dat P2/P3 do PMG RAM až během VBI | `043652f` |
+| PAUSED bliká po 32 snímcích | `ab1fdac` |
+| Syté barvy: prázdné textové buňky + plný jas PMG | `6b83d21` |
+| Dvě stránky HELP, druhá s bodováním | `19a33e3` |
+| Postupný nápočet bodů za řady | `a8b3c2b` |
+| Postupný nápočet levelového bonusu | `fba79b7` |
+| Levelové pípání 1 snímek tónu + 2 ticho | `853126f` |
+| Samostatné prototypy a build v design/ | `5bb129b` |
+
+Paleta `tools/DefaultPAL.pal` zůstala beze změny. `PieceCol` používá původní
+hodnoty `$9A,$EE,$48,$B8,$34,$76,$1A`. Předchozí audit nesprávně prezentoval
+pád HELP jako nový nález aktuální hry: novější historie už tuto chybu opravila.
+Pokyny v AGENTS nyní vyžadují kontrolu větví a upstreamu před zahájením oprav.
+
+## Opravy a řešení souběhu s novější hrou
+
+| Oblast | Výsledné řešení | Ověření |
 |---|---|---|
-| P1: VBI přepsalo pracovní `ptr2/tmp4`; text skončil ve zvukové tabulce | `SoundTick` má vlastní ZP ukazatel `SndRead`; číslo kanálu ukládá na zásobník VBI | Přerušení zápisu textu, uchování registrů a pracovní ZP u všech 13 efektů, neměnnost kódu/tabulek při pěti časováních harnessu |
-| P2: monolitické `AiPlan` přehlédlo krátký ESC | `AiPlan` jen zahájí hledání; `StPlan` volá `AiPlanStep` po jednom kandidátovi za krok, mezi kroky běží vstupy a čas | ESC držený tři snímky ukončí demo, každý krok obnoví Board, hledání všech sedmi typů skončí nejvýše po 48 krocích |
-| P2: PAUSED nezastavilo dokončení levelu | `LevelDoneSeq` během pauzy nesnižuje odpočet; game over pauzu ignoruje | Level i odpočet během 160 snímků pauzy stojí, po obnovení přechod doběhne; game over stále přijímá START/ESC |
-| P2: `test_game.py` neměl aserce výsledků | Přidané kontroly stavů, vykreslené studny, obtížností, pauzy a návratů; rozšířený audit | Herní scénář končí `ALL OK`, audit kódem 0; čitelnost a rozvržení ověřeny také na PNG |
-| P2: `make.bat` pokračoval po chybě | Zastavení s kódem 1 po každém neúspěšném překladu, varianta `game`, práce ve vlastním adresáři | Test chyby na každém ze čtyř překladů, úspěšný úplný build a varianta `game`, cesty s mezerami |
+| VBI a pracovní paměť | Jediný soukromý ukazatel `SndRead`, kanál na zásobníku; odstraněna duplicita obou nezávislých oprav | Text během VBI, registry/ZP, 13 zvukových sekvencí, test_irq |
+| Dlouhé plánování AI | `AiPlanStep` vyhodnotí nejvýše jednoho kandidáta, mezi kroky se čtou vstupy | Krátký ESC, nejvýše 48 kandidátů, obnova Board |
+| Pauza dokončení levelu | Stojí odpočet i animovaný bonus, nepípá; game over pauzu ignoruje | 160 snímků pauzy a následné dokončení levelu |
+| Optimalizace obrazu | `BoardDirty`/`ValuesDirty`, cache zpráv a banneru | Nezměněný RenderGame: 22 instrukcí, 0 zápisů do textové obrazovky |
+| Barevné kostky + cache | Při změně plochy se obnoví také PcBuf; P2 viditelný ve ST_FALL i ST_PLAN | Všech 28 rotací, 7 barev, NEXT, lock a EXPERT |
+| Blikání pauzy + cache | Klíč zprávy obsahuje bit `$20` pro PAUSED, `$10` pro DEMO/level | Přepínání PAUSED po 32 snímcích |
+| Animované skóre + cache | ScoreTick běží každý aktivní krok blikání, ScoreLines invaliduje panel | Body rostou v přesných intervalech, správné počítadlo řad a konečná suma |
+| Build | Hra přes make.bat, čtyři prototypy přes design/make.bat; oba končí po chybě | 5 testů, chyby každého z 5 překladů a cesty s mezerami |
 
-## Zjednodušení a výkon
+Zůstává sjednocené mazání položek menu, odstranění mrtvých dat a aserce
+rozměrů/hranice paměti. Hledání AI na prázdné ploše má nejdelší krok
+5 697 instrukcí; celkový objem hledání se podstatně nezmenšil.
+XEX této spojené verze má 10 663 bajtů. Počty instrukcí nejsou měřením
+cyklů na Atari; VBI dál obsluhuje PMG i při nezměněném textovém obrazu.
 
-- `BoardDirty` a `ValuesDirty` dovolují přeskočit nezměněnou studnu/panel.
-  Zpráva a DEMO banner mají cache obsahu a fáze blikání. Vynucení při vstupu
-  do hry i změny po pohybu, rotaci, pádu, mazání a novém levelu jsou zachované.
-- Čtyři mazací rutiny menu nahradila `ClearMenuItem` s tabulkou adres.
-- Odstraněny nepoužívané `RowBuf`, `DliCnt` a `TxtH3`. `GROWS` se používá
-  v display listu, `MSG_DEMO` jako klíč cache zprávy.
-- Pole a odpovídající smyčky používají `BOARD_SIZE`; MADS aserce hlídají
-  10×24 a osmibitový index. Tabulky a rozvržení nadále výslovně odpovídají
-  těmto rozměrům. Aserce chrání také hranici kódu před PMG oblastí.
-- Opravené zastaralé komentáře a kontaktový list screenshotů: výška každé
-  buňky nyní vychází z nejvyššího obrázku, takže spodní části hry nejsou oříznuté.
+## Provedené ověření
 
-| Měření v harnessu | Před opravou | Po opravě |
-|---|---:|---:|
-| Instrukce nezměněného `RenderGame` | 3 228 | 22 |
-| Zápisy nezměněného `RenderGame` do obrazovky | 62 | 0 |
-| Nejdelší souvislé plánování na prázdné ploše (ze sedmi typů) | 190 618 instrukcí | nejvýše 5 697 instrukcí v jednom kroku |
-| Velikost sestaveného XEX | 9 287 B | 9 471 B |
+- Sestavení hry a všech čtyř prototypů MADS.
+- `test_game.py`: menu, obě stránky HELP, tři obtížnosti, řady, level,
+  pauza, ESC, game over a demo; stavy i soulad textové studny s Board.
+- `test_piece_pm.py`: P2/P3 data a registry, všech 7 barev a 28 rotací,
+  centrování NEXT, pohyb, rotace, pád, lock, ST_PLAN a skrytí P3 v EXPERT.
+- `test_ui.py`: 32snímkové blikání PAUSED, HELP a bodování, 24snímkový
+  nápočet řad, 48snímkový bonus levelu a pípání každé tři snímky.
+- `test_irq.py`: časté VBI při kreslení HELP, zachovaný text a návrat.
+- `audit_tetris.py`: 10 976 hraničních kolizí, 120 mazání řad proti referenci,
+  60 kombinací struktur/obtížností/levelů, 100 převodů a 80 animovaných
+  bodových odměn včetně platnosti BCD po každém snímku; dále zvuky/VBI,
+  paměť, AI, DEV a pauza. Výsledek `detected_issues: []`, kód 0.
+- `test_build.py`: oba build skripty, úspěchy i selhání.
+- Kontrola screenshotů hry a všech sedmi barev s původní DefaultPAL paletou,
+  `git diff --check` a kontrola změn proti aktuálnímu origin/main.
 
-Počet instrukcí není měření cyklů nebo času na skutečném Atari. Celkový
-objem hledání AI zůstává podobný; změnou je jeho rozdělení. Během hledání
-zůstává dílek ve spawn poloze a běží čas, pak přejde do pádu s obvyklým
-čítačem přemýšlení 14. U složitějších kusů může hledání trvat 48 herních kroků.
+Harness je částečný model CPU/grafiky, zvuk ověřuje zápisy POKEY.
+Tato kontrola nezahrnuje poslech a časování na skutečném Atari nebo v Altirře.
 
-## Rozsah úspěšného ověření
+## Opakování a návrat
 
-- Překlad hry i všech tří prototypů přes `make.bat`.
-- 10 976 hraničních kombinací typu/rotace/pozice proti kolizi s okrajem.
-- 120 náhodných ploch s 1–4 plnými řádky proti referenčnímu mazání.
-- 60 kombinací obtížnosti/levelu proti tabulkám startovních struktur.
-- 100 číselných převodů a 80 kombinací bodování řad.
-- Všech 13 úplných POKEY sekvencí: AUDF/AUDC, délky, ukončení, uchování
-  registrů, decimal flagu a pracovní ZP při VBI.
-- Hledání všech typů AI po krocích s vykreslováním mezi nimi, obnova Board
-  po každém kandidátovi a omezení počtu instrukcí kroku.
-- Krátký ESC při hledání, zastavení a obnovení dokončení levelu, OPTION
-  při bootu, hranice DEV levelů, N/G a jejich neúčinnost v běžném režimu.
-- Průchod menu, HELP, EASY, ADVANCED, EXPERT, pauzou, dokončením levelu,
-  game over a demem s kontrolou stavů a obsahu vykreslené studny.
-- Čtyři testy řízení buildu; jeden obsahuje čtyři podscénáře chyb překladače.
-- Kontrola vykresleného přehledu obrazovek a `git diff --check`.
-
-Harness je částečný model hardwaru. Poslech skutečného POKEY, plný OS
-a chování na fyzickém Atari či NTSC zůstávají mimo rozsah tohoto ověření.
-Úspěšné kontroly nevylučují chybu v jiném netestovaném stavu.
-
-## Opakování kontrol
-
-Z `src/tetris` v PowerShellu, po úspěšném buildu:
+Z adresáře Tetrisu:
 
 ```powershell
 ./make.bat
+./design/make.bat
 python tools/test_build.py
 python tools/audit_tetris.py
 cd tools
 python test_game.py
+python test_piece_pm.py
+python test_ui.py
+python test_irq.py
 ```
 
-Pythonové herní kontroly samy nesestavují XEX ani labely. Úspěšný audit
-vrací 0 a prázdné `detected_issues`; při nálezu vrací 1. Herní průchod vypíše
-`ALL OK`. Potřebné závislosti jsou Python 3 a Pillow.
-
-## Návrat k výchozímu stavu
-
-`main` zůstává na původní historii. Commit `61b7820` ve feature větvi
-obsahuje hru před opravami a k ní dokumentaci i reprodukce původních chyb.
-Pro další pokus z tohoto bodu lze vytvořit novou větev:
+`feature/tetris-review-fixes` zůstává na `ebe0654` jako záloha před spojením.
+Obsahuje starou šedou hru s opravami, nikoli poslední barevnou verzi.
+Poslední barevná hra před touto revizí je v `199b92c` (také ve stromu
+`5bb129b`). Pro samostatný návrat k ní lze s uloženými změnami vytvořit větev:
 
 ```powershell
-git switch -c feature/tetris-before-review 61b7820
+git switch -c feature/tetris-colored-baseline 199b92c
 ./make.bat
 ```
 
-Přepínat s uloženými změnami. XEX a labely jsou ignorované výstupy, takže
-se při změně větve samy nevrátí: po přepnutí je nutné znovu sestavit příslušný
-zdroj. Původní reprodukce v `61b7820` záměrně hlásí tehdejší vady.
+Lokální main i předchozí feature větev zůstávají zachované. Ignorované XEX
+a labely se při změně větve samy nevrátí: vždy znovu přeložit příslušný zdroj.

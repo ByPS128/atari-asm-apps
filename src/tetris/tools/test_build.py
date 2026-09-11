@@ -9,10 +9,13 @@ import unittest
 
 @unittest.skipUnless(os.name == 'nt', 'Windows batch build')
 class BuildTest(unittest.TestCase):
-    def run_build(self, failure='', mode=''):
+    def run_build(self, failure='', mode='', design=False):
         with tempfile.TemporaryDirectory(prefix='tetris build ') as folder:
             root = Path(folder)
-            shutil.copyfile(Path(__file__).resolve().parents[1] / 'make.bat', root / 'make.bat')
+            source = Path(__file__).resolve().parents[1]
+            if design:
+                source /= 'design'
+            shutil.copyfile(source / 'make.bat', root / 'make.bat')
             (root / 'mads.cmd').write_text(
                 '@echo off\n'
                 'echo %~1>>"%TETRIS_BUILD_LOG%"\n'
@@ -28,15 +31,18 @@ class BuildTest(unittest.TestCase):
             return result.returncode, log.read_text().splitlines()
 
     def test_stops_after_each_failure(self):
-        targets = ['tetris.asm', 'design.asm', 'design2.asm', 'design3.asm']
-        for index, target in enumerate(targets):
-            with self.subTest(target=target):
-                code, calls = self.run_build(failure=target)
-                self.assertNotEqual(code, 0)
-                self.assertEqual(calls, targets[:index+1])
+        for design, targets in [(False, ['tetris.asm']), (True, ['design.asm', 'design2.asm', 'design3.asm', 'design4.asm'])]:
+            for index, target in enumerate(targets):
+                with self.subTest(target=target):
+                    code, calls = self.run_build(failure=target, design=design)
+                    self.assertNotEqual(code, 0)
+                    self.assertEqual(calls, targets[:index+1])
 
     def test_full_build(self):
-        self.assertEqual(self.run_build(), (0, ['tetris.asm', 'design.asm', 'design2.asm', 'design3.asm']))
+        self.assertEqual(self.run_build(), (0, ['tetris.asm']))
+
+    def test_design_build(self):
+        self.assertEqual(self.run_build(design=True), (0, ['design.asm', 'design2.asm', 'design3.asm', 'design4.asm']))
 
     def test_game_only(self):
         self.assertEqual(self.run_build(mode='game'), (0, ['tetris.asm']))

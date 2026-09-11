@@ -15,8 +15,8 @@ spolu s ním. Bitově shodný XEX ani stejná náhodná posloupnost nejsou poža
 Vytvořit hratelný Tetris v assembleru 6502 pro Atari XL/XE, sestavitelný MADS
 do souboru `tetris.xex`. Cílové časování je PAL 50 Hz. Hra má titulní obrazovku,
 menu, nápovědu, tři obtížnosti, dvacet levelů, autonomní demo a zvuky POKEY.
-Vizuální charakter tvoří systémové písmo, tenká studna, plné jednobarevné
-kostky, zelená nápověda vlevo a teple zbarvený informační panel vpravo.
+Vizuální charakter tvoří systémové písmo, tenká studna, sytě barevné aktivní
+kostky a NEXT, šedé usazené buňky, zelená nápověda vlevo a teplý panel vpravo.
 
 Použít Atari OS ROM pro font a obsluhu vektorů přerušení. Hra BASIC nevyužívá,
 přímo ovládá grafiku, zvuk a vstupní hardware. Výstup má obsahovat adresu RUN
@@ -34,7 +34,9 @@ flowchart LR
     T -->|750 snímků nečinnosti| D[Demo]
     M -->|750 snímků nečinnosti| D
     M -->|HELP| H[Nápověda]
-    H -->|herní vstup nebo konzolové tlačítko| M
+    H -->|další namapovaný vstup| H2[Bodování]
+    H -->|ESC| M
+    H2 -->|namapovaný vstup nebo ESC| M
     M -->|START GAME nebo START| G[Hra]
     G -->|cíl řádků| L[Dokončení levelu]
     L -->|150 snímků| G
@@ -78,8 +80,10 @@ Zvolená položka je světlá, ostatní zelené; u vybrané bliká šipka `>` po
 
 Samostatná textová obrazovka na černém pozadí bez PMG. Nadpis `TETRIS - HELP`,
 sekce SKILL, LEVELS, CONTROLS. Popsat všechny tři obtížnosti, ROWS x/y,
-rychlost levelu, podmínku game over a ovládání. Návrat novým namapovaným
-herním vstupem nebo START/SELECT/OPTION. Na HELP neběží odpočet pro demo.
+rychlost levelu, podmínku game over a ovládání. Druhá stránka `TETRIS - SCORING`
+obsahuje bodování řad, dropů a levelu. Nový namapovaný herní vstup nebo
+START/SELECT/OPTION listuje ze strany 1 na 2 a ze strany 2 do menu. ESC vrací
+do menu z obou. Na HELP neběží odpočet pro demo. Texty jsou v příloze E.
 
 ## 3. Vstupy
 
@@ -158,6 +162,12 @@ Případné další plné řady znovu zpracovat před novým spawnem.
 | 3 | 300 |
 | 4 | 1200 |
 
+Bonus za řady přičítat rovnoměrně po jednotkách 10 bodů během 24 snímků
+blikání: celkový počet jednotek N přidávat každý snímek do akumulátoru,
+za každých 24 odebrat 24 a přičíst jednu jednotku. Například 40 bodů přibude
+v krocích 10 na snímcích 6/12/18/24. Na konci přesně celý bonus. Samotný
+napočet řad je bez pípání; efekt za nalezení řady normálně zazní.
+
 Přičíst počet řad do celkového LINES i do ROWS aktuálního levelu. Skóre za
 drop nemá násobič levelu. Po dokončení levelu přičíst samostatně 1000 × jeho
 číslo. Skóre se zobrazuje na 6 číslic, LINES na 4, s počátečními nulami;
@@ -179,7 +189,10 @@ rotaci 0 ve všech obtížnostech.
 
 Level je splněn, když ROWS dosáhne nebo překročí jeho cíl. Počítá se počet
 řad, nikoli vyprázdnění studny. Přehrát dvouhlasou fanfáru, přičíst bonus
-a na 150 snímků zobrazit `LEVEL COMPLETE - GET READY`. Potom vyčistit celou
+a na 150 snímků zobrazit `LEVEL COMPLETE - GET READY`. Bonus přičítat
+rovnoměrně během prvních 48 snímků po jednotkách 10 bodů, stejným
+akumulátorem jako u řad s dělitelem 48; během napočtu pípání (kapitola 11).
+Potom vyčistit celou
 studnu, zvýšit level nejvýše na 20, nastavit jeho rychlost, ROWS=0 a nový cíl
 a v ADVANCED/EXPERT vložit strukturu. Přebytečné řady nad cílem se do nového
 ROWS nepřenášejí. Celkové skóre, LINES, čas a připravený NEXT pokračují.
@@ -192,14 +205,15 @@ výplňová řada `#.##.###.#`. Výše ležící nevyplněná část studny je p
 
 ## 7. Pauza, čas, game over a DEV
 
-P nebo START v běžné hře přepíná pauzu. Zobrazit `PAUSED - PRESS P TO CONTINUE`.
+P nebo START v běžné hře přepíná pauzu. Zobrazit `PAUSED - PRESS P TO CONTINUE`
+a přepínat jeho inverzi po 32 snímcích, tedy pomaleji než DEMO (16).
 Při pauze stojí herní stavy, gravitace, boční opakování, blikání mazaných řad
 i čas; VBI, grafika a zvukový sekvencer pokračují. ESC funguje i v pauze.
 Čas je mm:ss, po 50 aktivních krocích přibude sekunda, po 60 sekundách minuta;
 po 99:59 se přetočí. Počítá i demo, mazání řad a dokončení levelu.
 
-Dokončení levelu při pauze zastaví i svůj 150snímkový odpočet; po obnovení
-pokračuje ze stejné hodnoty. Game over pauzu nepřijímá a jeho animace pokračuje.
+Dokončení levelu při pauze zastaví svůj 150snímkový odpočet i přičítání
+bonusu a umlčí jeho pípání; po obnovení pokračuje ze stejného stavu. Game over pauzu nepřijímá a jeho animace pokračuje.
 ESC přeruší obě sekvence. VBI a zvukový sekvencer běží stále.
 
 Game over nastane až při neplatném spawnu. Přehrát sestupný zvuk a postupně
@@ -246,7 +260,8 @@ nulované, vztahují se k textu a nezahrnují horní prázdný pás.
 | Zpráva demo / pauza / level / game over | 1 / 6 / 7 / 4 | 25 |
 | Game over v demu | 15 | 25 |
 
-Kostka je plný znak 8×8, všechny typy mají stejný vzhled. Prázdná buňka je
+Buňka kostky je plný čtverec 8×8. Usazené buňky kreslí šedý textový blok;
+aktivní dílek a NEXT barevný hráč PMG nad prázdnými znaky. Prázdná buňka je
 mezera. Rámečky jsou tenké čáry systémového fontu; interní kódy:
 plný blok `$80`, rohy levý horní `$51`, pravý horní `$45`, levý dolní `$5A`,
 pravý dolní `$43`, vodorovná `$52`, svislá `$7C`.
@@ -256,16 +271,31 @@ V každé ose platí odsazení `floor((4-velikost)/2)` od vnitřního okraje.
 Nevykreslovat větší buňky než ve studni. ROWS ukazuje dvě číslice, lomítko
 a dvě číslice cíle, LEVEL dvě číslice, TIME mm:ss.
 
-Černé pozadí má kód `$00`, jas textu je `$0C`. PMG pruh vlevo používá `$B0`,
-panel `$20`, studna `$02`. V hi-res textu má svítící pixel odstín hráče
-a jas textu, ostatní pixely barvu hráče. Proto je nápověda jasně zelená na
-tmavě zeleném pásu, panel světlý teplý na tmavě červeném pásu, studna šedá.
-NEXT leží mimo pruhy. Barva studny je v celé výšce stejná; hra nemá řádkový DLI.
+Černé pozadí má kód `$00`, text a usazené buňky `$0C`. PMG pruh vlevo
+používá `$B0`, panel `$20`. V hi-res textu má svítící pixel odstín hráče
+a jas textu, ostatní pixely barvu hráče: nápověda je zelená, panel teplý.
+Aktivní dílek i NEXT mají prázdné znaky a celý čtverec vykresluje PMG,
+takže barva i jas pocházejí z hráče. Barvy typů:
 
-Pruhy PMG: P0 čtyřnásobná šířka, sloupce 1–8/řádky 1–23; P1 čtyřnásobná,
-sloupce 29–36/řádky 8–23; P2 čtyřnásobná, sloupce 14–21/řádky 0–24;
-P3 dvojnásobná, sloupce 22–25/řádky 0–24. Použít single-line DMA a prioritu
-hráčů nad playfieldem. Horní PMG souřadnice řádku r je `16+8*r`.
+| Typ | Barva | Registr COLPM |
+|---|---|---|
+| I | tyrkysová | `$9A` |
+| O | žlutá | `$EE` |
+| T | fialová | `$48` |
+| S | zelená | `$B8` |
+| Z | červená | `$34` |
+| J | modrá | `$76` |
+| L | oranžová | `$1A` |
+
+P0 má čtyřnásobnou šířku, sloupce 1–8/řádky 1–23; P1 čtyřnásobnou,
+sloupce 29–36/řádky 8–23. P2 a P3 mají dvojnásobnou šířku: P2 sleduje
+aktivní dílek, P3 vycentrovaný NEXT. Usazené buňky ani stěny PMG nepodbarvuje.
+Použít single-line DMA a prioritu hráčů nad playfieldem. Souřadnice řádku r
+je `16+8*r`, HPOS pro sloupec c je `48+4*c`. Čtyři lokální sloupce kusu
+používají masky `$C0,$30,$0C,$03`, každý řádek buňky zabírá 8 scanlinů.
+Hlavní kód připravuje 32bajtový buffer každého kusu, VBI teprve smaže stará
+data P2 a přenese nové buffery do PMG RAM. P2 zůstává viditelný při plánování
+AI i pauze, po zamknutí zmizí. V EXPERT je P3 skrytý. Herní DL nemá DLI.
 
 V demu bliká inverzí `DEMO` a dolní text
 `DEMO PLAY - MOVE STICK OR PRESS A KEY`. Inverzi přepínat po 16 snímcích;
@@ -347,6 +377,11 @@ plných řad. LINE/TETRIS při jejich nálezu, FANF1/FANF2 při dokončení leve
 OVER při game over, MENU při posunu menu/změně hodnot, SELECT při potvrzení
 a PAUSE při přepnutí pauzy.
 
+Napočet levelového bonusu používá kanál 0 přímo z herní smyčky: AUDF=`$21`,
+AUDC=`$A8` (přibližně 960 Hz). Každý třetí aktivní snímek jeden snímek tónu,
+mezitím dva snímky ticho. Při doplacení bonusu, pauze a návratu do menu
+kanál umlčet. Tento zvuk není další sekvencí z přílohy D.
+
 Pro obdobnou nativní implementaci rezervovat ZP pro ukazatele a dočasné
 hodnoty, RAM pro 10×24 usazených buněk, složený obraz a poslední obraz.
 Referenční rozložení: ZP `$80–$92`, kód/data od `$2000` pod `$5000`,
@@ -371,21 +406,23 @@ Předpřipravené rozvržení/tabulky počítají s 10×24; jejich předpoklady 
 osmibitového indexu ověřovat asercemi překladače.
 
 Build se musí zastavit při první chybě a vrátit nenulový kód. Referenční
-`make.bat` sestaví hru i prototypy, `make.bat game` jen XEX hry a její labely.
+`make.bat` sestaví XEX hry a labely; `design/make.bat` samostatně čtyři
+prototypy. Oba fungují i při spuštění z jiného pracovního adresáře.
 
 ## 12. Přejímací scénáře
 
 Toto jsou požadavky na ověření nové implementace. `tools/test_game.py`
 kontroluje herní stavy a vykreslenou studnu a ukládá obraz. `tools/audit_tetris.py`
 přidává cílené aserce pravidel, přerušení, zvukových dat a DEV, `tools/test_build.py`
-ověřuje řízení buildu. Samotný úspěch těchto skriptů neověřuje například
+ověřuje řízení buildu. `test_piece_pm.py` kontroluje P2/P3, `test_ui.py`
+HELP/blikání/skóre, `test_irq.py` HELP při častých VBI. Samotný úspěch těchto skriptů neověřuje například
 skutečný zvuk POKEY a celý obraz na fyzickém Atari.
 
 | ID | Příprava a akce | Očekávaný výsledek |
 |---|---|---|
 | A01 | Spustit XEX, potvrdit úvod | Menu se čtyřmi položkami, level 01/EASY, bez okamžitého spuštění hry týmž stiskem |
 | A02 | Projít menu, měnit obě hodnoty přes hranice | Cyklický výběr 1–15 a EASY/ADVANCED/EXPERT, START vždy spustí hru |
-| A03 | Otevřít HELP, vrátit se | Čitelná nápověda bez PMG, obnovené menu s vybraným HELP |
+| A03 | Otevřít HELP, listovat, vyzkoušet ESC z obou stran | Dvě čitelné stránky bez PMG, druhá o bodování; návrat do menu s vybraným HELP |
 | A04 | Spustit EASY | Prázdných 10×24 usazených buněk, aktivní dílek, NEXT, ROWS 00/05, nulové LINES |
 | A05 | Vyzkoušet dílky u stěn, podlahy a překážek | Žádná buňka mimo studnu/přes jinou, kicky v předepsaném pořadí, platný spawn |
 | A06 | Držet boční směr a dolů, poté vytvořit další kus | Správné DAS, soft drop po uvolnění dolů u nového kusu, žádný přenos rychlého pádu |
@@ -405,9 +442,11 @@ skutečný zvuk POKEY a celý obraz na fyzickém Atari.
 | A20 | Vyvolat všechny zvuky, souběžně fanfáru | Správné kanály/trojice, překrývání podle kanálů, slyšitelný výsledek v plném emulátoru nebo na Atari |
 | A21 | Přerušit zápis textu pomocí VBI při aktivních zvucích; měnit fázi VBI | Text jde do obrazovky, kód/tabulky se nemění, pracovní paměť a registry hlavní smyčky se obnoví |
 | A22 | Při plánování AI stisknout ESC na tři snímky | Návrat do menu; před opuštěním kandidáta je Board obnovený |
-| A23 | Pauza během fanfáry, čekání, obnovení | Level ani odpočet se během pauzy nezmění; po obnovení sekvence doběhne |
-| A24 | Vynutit chybu každého překladu v make.bat | Nenulový kód a žádný další překlad po chybě; varianta game sestavuje pouze hru |
-| A25 | Opakovaně vykreslit nezměněný herní stav | Žádné zápisy do obrazovky; po změně kusu, skóre nebo zprávy jsou příslušné části aktualizované |
+| A23 | Pauza během fanfáry, čekání, obnovení | Level, odpočet i bonus stojí; napočet nepípá, PAUSED bliká po 32 snímcích; po obnovení sekvence doběhne |
+| A24 | Vynutit chybu každého překladu hry i prototypů | Nenulový kód a žádný další překlad po chybě; herní make.bat sestavuje pouze hru |
+| A25 | Opakovaně vykreslit nezměněný herní stav | Žádné zápisy do textové obrazovky; po změně kusu, skóre nebo zprávy jsou příslušné části aktualizované, PMG dál obsluhuje VBI |
+| A26 | Všech 7 typů a 28 rotací; pohyb, pád, lock, plánování AI | Správný tvar a barva aktivní kostky i NEXT, žádný šedý pruh studny, po locku šedé usazené buňky |
+| A27 | Pozorovat bonus za řadu a level | Řada 40 bodů přibývá na snímcích 6/12/18/24 bez pípání napočtu; levelový bonus doběhne za 48 snímků s pípáním po třech |
 
 U krokových testů oddělit počet VBI od vykreslení screenshotu; referenční
 harness při `screenshot()` provede další snímek. Náhodný generátor pro
@@ -669,9 +708,10 @@ Přesné časování čítače popisuje kapitola 11.
 
 ## Příloha E: text a pozice HELP
 
-Poloha je řádek/sloupec textové mřížky 26×40, od nuly. Zachovat odsazení
-pokračovacích řádků. Doslovná závěrečná výzva uvádí ANY KEY; vstupy se
-přesto vyhodnocují podle kapitoly 3, stejně jako u referenční hry.
+Poloha je řádek/sloupec textové mřížky 26×40, od nuly. Zachovat odsazení.
+Výzva ANY KEY znamená namapované vstupy z kapitoly 3. ESC z obou stran vrací do menu.
+
+### Strana 1 – ovládání
 
 | Řádek | Sloupec | Text |
 |---:|---:|---|
@@ -694,7 +734,28 @@ přesto vyhodnocují podle kapitoly 3, stejně jako u referenční hry.
 | 20 | 1 | `P OR START         PAUSE` |
 | 21 | 1 | `ESC                ABANDON GAME` |
 | 22 | 1 | `SELECT / OPTION    LEVEL / SKILL (MENU)` |
-| 24 | 4 | `PRESS ANY KEY OR FIRE TO RETURN` |
+| 24 | 2 | `ANY KEY = NEXT PAGE     ESC = MENU` |
+
+### Strana 2 – bodování
+
+| Řádek | Sloupec | Text |
+|---:|---:|---|
+| 1 | 12 | `TETRIS - SCORING` |
+| 3 | 1 | `ROWS CLEARED AT ONCE     POINTS` |
+| 4 | 1 | `1 ROW                 40 X LEVEL` |
+| 5 | 1 | `2 ROWS               100 X LEVEL` |
+| 6 | 1 | `3 ROWS               300 X LEVEL` |
+| 7 | 1 | `4 ROWS (TETRIS)     1200 X LEVEL` |
+| 9 | 1 | `THE MORE ROWS YOU CLEAR WITH ONE` |
+| 10 | 1 | `PIECE, THE MORE EACH ROW IS WORTH.` |
+| 12 | 1 | `SOFT DROP (DOWN)       1 PER CELL` |
+| 13 | 1 | `HARD DROP (SPACE)      2 PER CELL` |
+| 14 | 1 | `LEVEL COMPLETE       1000 X LEVEL` |
+| 16 | 1 | `LEVEL` |
+| 17 | 1 | `EACH LEVEL FALLS FASTER AND NEEDS` |
+| 18 | 1 | `MORE ROWS (SEE ROWS X/Y). A HIGHER` |
+| 19 | 1 | `START LEVEL MEANS MORE POINTS.` |
+| 24 | 2 | `ANY KEY = BACK TO MENU` |
 
 ## Příloha F: texty úvodu a menu
 

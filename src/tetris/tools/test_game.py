@@ -16,7 +16,7 @@ def check_board_screen(m):
             x, y = val(m,'CurX')+(code & 15), val(m,'CurY')+(code >> 4)
             x &= 255
             check(x < 10 and y < 24, 'active piece outside well')
-            cells[y*10+x] = val(m,'CurType')
+            cells[y*10+x] = 8  # active cells are rendered by P2, not text
     elif state == m.label('ST_CLEAR') and val(m,'FlashPhase'):
         for row in m.mem[lab(m,'FullRows'):lab(m,'FullRows')+val(m,'FullCnt')]:
             cells[row*10:row*10+10] = [8]*10
@@ -40,6 +40,8 @@ print('help DL', hex(m.mem[0xD403]), 'PmOn', val(m,'PmOn')); m.screenshot('out_n
 print('\n'.join(m.text_rows(0x6000,26)[:8]))
 check(m.mem[0xD403] == 0x70 and val(m,'PmOn') == 0, 'HELP graphics')
 check('TETRIS - HELP' in m.text_rows(0x6000+40,1)[0], 'HELP title')
+m.tap(fire=True); m.run(10)
+check('TETRIS - SCORING' in m.text_rows(0x6000+40,1)[0], 'HELP scoring page')
 m.tap(fire=True); m.run(10); print('back DL', hex(m.mem[0xD403]))
 check(m.mem[0xD403] == 0x71, 'HELP return to menu')
 # --- easy game ---
