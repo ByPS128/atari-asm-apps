@@ -8,10 +8,12 @@ Model snimku:
      spusti DLI handler (VDSLST). Zapis do WSYNC uvnitr handleru vykresli aktualni
      scanline a posune se na dalsi (takze duha titulku funguje jako na realu),
   3. VBI pres VVBLKI (OS pushne A,X,Y; skok na XITVBV $E462 = PLA Y,X,A + RTI).
-OS neni - hra ho nepouziva (vlastni DL, VBI, cteni HW registru).
+Plny OS neni emulovan. Hra pouziva jeho vektory preruseni, XITVBV a ROM font;
+harness potrebne chovani preruseni nahrazuje a font nahrava z PNG.
+POKEY zapisy pouze loguje do pokey_log, zvuk nesyntetizuje.
 
 Pouziti:  python emu.py [frames] [out.png]
-Skriptovani: viz tridu Machine (set_stick, press_key, consol, ...) a test_tetris.py.
+Skriptovani: viz tridu Machine (set_stick, set_key, set_consol, tap, ...) a test_game.py.
 """
 import os, sys, random, re
 from cpu6502 import CPU
