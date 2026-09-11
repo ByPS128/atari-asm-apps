@@ -112,8 +112,13 @@ DLI s WSYNC, PMG včetně hi-res triku a barev po řádcích) + `test_*.py`.
 - Blokující sekvence nesmí používat `tmp*`/`celly` přes volání `RenderGame` (viz `SeqCnt/SeqRow`).
 - V GTIA 10 je okraj = COLPM0 (netýká se nového designu, ale harness to nemodeluje).
 - Řádek 25 (26. řádek) končí na scanline 224 – na NTSC může být oříznut; na PAL OK.
-- `atari800.exe` na H: na tomto Windows nejede (DirectDraw); uživatel testuje ve vlastním
-  emulátoru, my v `tools/emu.py` (render do PNG, `Machine(xex=...)`).
+- `atari800.exe` na H: na tomto Windows nejede (DirectDraw); uživatel testuje v Altirře 4.21
+  (`C:\_ByPS\Atari\Altirra\Altirra-4.21`), my v `tools/emu.py` (render do PNG, `Machine(xex=...)`).
+- **Kód volaný z VBI/DLI nesmí sdílet ZP proměnné (`ptr`, `ptr2`, `tmp*`) s hlavním kódem.**
+  `SoundTick` je původně sdílel; když SFX hrál během kreslení HELP, VBI přepsal `ptr2`
+  uprostřed `PutStr`, text se zapsal mimo a Altirra spadla (BRK → SELF TEST). Zvuk má teď
+  vlastní `sptr`/`stmp`. Harness pouští VBI jen po 10 000 instrukcích, takže to neviděl;
+  `tools/test_irq.py` běží s VBI každých 400 instrukcí a chybu chytá.
 
 ## 7. Ověření
 
