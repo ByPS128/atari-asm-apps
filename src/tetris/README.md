@@ -7,7 +7,7 @@ ve vyšších obtížnostech začíná se startovními strukturami cihel ve stud
 ## Build
 
 ```
-make.bat            ; = mads tetris.asm -o:tetris.xex -t:tetris.lab (+ design*.xex)
+make.bat            ; = mads tetris.asm -o:tetris.xex -t:tetris.lab
 ```
 
 Výsledek `tetris.xex` spustíš v libovolném emulátoru (Altirra, atari800) nebo na
@@ -81,7 +81,7 @@ klávesy nic nedělají.
 
 ## Prototypy designu
 
-`design.asm` (GTIA 10), `design2.asm` (mode 4 + PMG) a `design3.asm` (Graphics 0,
+V `design/` (vlastní `make.bat`): `design.asm` (GTIA 10), `design2.asm` (mode 4 + PMG) a `design3.asm` (Graphics 0,
 schválený vzor) jsou statické mockupy, ze kterých vzešel současný vzhled.
 Historie rozhodnutí je v `HANDOFF.md`.
 

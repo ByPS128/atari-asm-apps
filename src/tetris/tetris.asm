@@ -63,7 +63,7 @@ SKCTL    = $D20F
 ; ---------------------------------------------------------------------
 COL_HINT   = $B0           ; podbarveni napovedy vlevo (player 0)
 COL_PANEL  = $20           ; podbarveni panelu vpravo (player 1)
-; barvy kostek - player 2 = aktivni kostka, player 3 = NEXT (vzor design4.asm):
+; barvy kostek - player 2 = aktivni kostka, player 3 = NEXT (vzor design/design4.asm):
 ; I tyrkysova, O zluta, T fialova, S zelena, Z cervena, J modra, L oranzova (Tetris Guideline).
 ; Bunky aktivni kostky a NEXT jsou ve videopameti PRAZDNE, barvu i jas dava jen hrac -> syte barvy.
 COL_TEXT   = $0C           ; jas textu a kostek (COLPF1)
@@ -89,7 +89,7 @@ MENU_H2    = MENUSCR+$150
 MENU_H3    = MENUSCR+$178
 MENU_CR    = MENUSCR+$1A0
 
-; rozvrzeni herni obrazovky (sloupce / radky znaku) - vzor design3.asm
+; rozvrzeni herni obrazovky (sloupce / radky znaku) - vzor design/design3.asm
 WELL_COL   = 15            ; prvni sloupec bunek studny (steny na 14 a 25)
 WALL_L     = 14
 WALL_R     = 25

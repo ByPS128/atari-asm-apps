@@ -14,14 +14,14 @@ co se přepisuje, a jak se to ověřuje.
 
 Hra `src/tetris/tetris.asm` (MADS, 6502) je funkční Tetris s menu, demem (AI), zvuky a
 klasickými pravidly. Původní herní obrazovka (GTIA mode 10, 9 barev, chunky písmo) byla
-esteticky odmítnuta. Po třech prototypech (`design.asm` GTIA, `design2.asm` ANTIC mode 4 +
-PMG, `design3.asm` Graphics 0) je **schválený směr = `design3.asm`**: Graphics 0 (ANTIC
+esteticky odmítnuta. Po třech prototypech (`design/design.asm` GTIA, `design/design2.asm` ANTIC mode 4 +
+PMG, `design/design3.asm` Graphics 0) je **schválený směr = `design/design3.asm`**: Graphics 0 (ANTIC
 mode 2, systémová znaková sada), plné bloky, studna z tenkých čar, barvy přes PMG a DLI.
 
-Cílový stav: přenést layout z `design3.asm` do `tetris.asm`, přidat nový model levelů
+Cílový stav: přenést layout z `design/design3.asm` do `tetris.asm`, přidat nový model levelů
 (cíl v řádcích + startovní struktury), zachovat menu, demo, zvuky a herní jádro.
 
-## 2. Schválený design herní obrazovky (`design3.asm` = vzor k okopírování)
+## 2. Schválený design herní obrazovky (`design/design3.asm` = vzor k okopírování)
 
 - **Režim**: vlastní display list, `$70` (8 prázdných linek) + **26 řádků** ANTIC mode 2
   (208 scanlinů). Obrazovka `SCREEN = $6000` (26×40 = 1040 B). Řádek 0 začíná na scanline 16.
@@ -45,7 +45,7 @@ Cílový stav: přenést layout z `design3.asm` do `tetris.asm`, přidat nový m
   - P0 quad (`SIZE 3`), HPOS `48+4*1`, sloupce 1..8, řádky 2..22, barva `$90` – nápověda.
   - P1 quad, HPOS `48+4*29`, sloupce 29..36, řádky 8..23, barva `$20` – panel.
   - **P2 double (`SIZE 1`) = aktivní kostka, P3 double = kostka v NEXT** (od 10.9.2026,
-    vzor `design4.asm`; nahradilo podbarvenou studnu). 1 bit hráče = půl znaku, 8 bitů =
+    vzor `design/design4.asm`; nahradilo podbarvenou studnu). 1 bit hráče = půl znaku, 8 bitů =
     4 buňky (`CellMask` $C0/$30/$0C/$03 pro dx 0..3). `UpdatePiecePM` (každý snímek
     z `RenderGame`) připraví `PcBuf` (32 scanlinů) podle `PieceTab`, `PcRow = 16+8*CurY`
     ($FF mimo `ST_FALL`), `PcHpos = 48+4*(WELL_COL+CurX)`, `PcCol = PieceCol[CurType]`.
@@ -100,7 +100,7 @@ DLI s WSYNC, PMG včetně hi-res triku a barev po řádcích) + `test_*.py`.
 ## 5. Co se přepisuje v `tetris.asm`
 
 1. Herní display list → 26 řádků mode 2 s DLI na každém řádku; `SetGameScreen` kreslí studnu,
-   NEXT rámeček, panel, nápovědu (zkopírovat `DrawMockup`/`NextBox` z `design3.asm`).
+   NEXT rámeček, panel, nápovědu (zkopírovat `DrawMockup`/`NextBox` z `design/design3.asm`).
 2. `Board`/`Comp` na 10×24 (`BH = 24`, `RowOff10` 24 položek, `RowPtr` = adresy řádků
    obrazovky), `DrawBoard` = zápis `$80`/`0` do znaků (žádná bitmapa), `PrevComp` porovnání
    zůstává.
@@ -135,7 +135,7 @@ DLI s WSYNC, PMG včetně hi-res triku a barev po řádcích) + `test_*.py`.
 ## 7. Ověření
 
 ```
-cd src/tetris && make.bat                 # tetris.xex, design*.xex
+cd src/tetris && make.bat                 # tetris.xex (prototypy: design\make.bat)
 cd tools && python test_game.py
 python -c "from emu import Machine; m=Machine(); m.run(120); m.screenshot('out.png')"
 ```
@@ -143,11 +143,11 @@ Po přepisu: aktualizovat testy na `BH=24`, `Board` 240 B, nové pozice textů (
 
 ## 8. První krok pro toho, kdo to zvedne
 
-Vzít `design3.asm` jako referenci layoutu a v `tetris.asm` nahradit sekci „VYKRESLOVANI HERNI
+Vzít `design/design3.asm` jako referenci layoutu a v `tetris.asm` nahradit sekci „VYKRESLOVANI HERNI
 OBRAZOVKY" + display list + VBI/DLI; teprve pak levely a ADVANCED. Průběžně renderovat
 harnessem a porovnávat s `tools/out_design3.png`.
 
 ## 9. Odkazy
 
 - PR původní verze: https://github.com/ByPS128/atari-asm-apps/pull/1 (větev `feature/tetris`)
-- Prototypy: `design.asm` (GTIA), `design2.asm` + `charset4.inc` (mode 4), `design3.asm` (schváleno)
+- Prototypy: `design/design.asm` (GTIA), `design/design2.asm` + `design/charset4.inc` (mode 4), `design/design3.asm` (schváleno)
