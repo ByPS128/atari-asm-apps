@@ -14,6 +14,27 @@ Model (PAL, 1.773447 MHz):
     na konci snimku, takze zvuk zacne o snimek pozdeji; pro testy staci).
   Neni: spojeni kanalu do 16 bitu, hi-pass filtry, presne poly startovni faze.
 
+Jak cist vystupy (navod pro AI, ktera zvuk neslysi):
+  1. Nejdriv describe/audio_text - je to presna pravda o registrech, prevedena na Hz a ms.
+     Kazdy radek = usek, kdy kanal drzel stejny AUDF/AUDC. Cisty ton ma 'hz', sum ma '-'.
+     Klesajici/rostouci 'hz' po radcich = klesavy/stoupavy zvuk; 'vol' po radcich = obalka.
+     Sousedni radky se stejnym 'hz' a klesajicim 'vol' = doznivani. 'ms' = delka (1 snimek = 20 ms).
+  2. Spektrogram (audio_png) potvrzuje, jak to vyzni:
+     - vodorovna svetla cara = ton; jeji vyska = frekvence (osa Hz). Obdelnikovy ton POKEY ma
+       nad zakladni carou dalsi cary na 3x, 5x, 7x... (liche harmonicke) - to je normalni, ne chyba.
+     - schody v carach = zmena tonu (skok), sikma cara = plynuly sweep.
+     - rovnomerne rozmazana plocha bez car = sum (17bit = "bily"; 4bit/5bit = drsny, periodicky,
+       cary hustsi a zubate). Tmave svisle pruhy uprostred sumu = pulzovani/dira v zvuku.
+     - dolni graf = obalka hlasitosti (0-15 = AUDC vol). Ostry nastup + schody dolu = doznivani,
+       spicky co 1 snimek = klikani (typicky chyba: zvuk se restartuje kazdy snimek).
+     - osa x = snimky od f0; porovnavej s tim, kdy se ve hre stalo to, co ma zvuk spustit.
+  3. Priznaky chyb: usek delky 1 snimek, ktery se opakuje dokola = zvuk se restartuje;
+     'vol' nikdy neklesne na 0 = zvuk nebyl vypnut; dva kanaly se stejnym Hz = zbytecny mix;
+     ton pod ~60 Hz nebo nad ~8 kHz = spatny AUDF/takt; 'noise17' tam, kde mel byt ton =
+     spatna distortion (viz mapovani bitu vyse).
+  4. Pro test stavej podminky nad describe (kind, len, vol, hz relace), ne nad surovym logem;
+     PNG/WAV ukladej jako out_*.{png,wav} (gitignore) - PNG si prohledni, WAV nabidni uzivateli.
+
 API (viz Machine.audio_*):
   render(pokey_log, frames, rate)  -> numpy float32 mono v <-1, 1>
   save_wav(samples, path, rate)

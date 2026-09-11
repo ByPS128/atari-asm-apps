@@ -107,4 +107,6 @@ filtry. Zápisy se uplatňují od snímku následujícího po zápisu (VBI). Met
 | `m.audio_text(f0)` | totéž jako čitelný text (Hz, ms) |
 
 `out*.wav`/`out*.png` se necommitují. Vzor použití v testu: `../snake/test_snake.py`
-(sežrání jablka).
+(sežrání jablka). **Jak výstupy číst a poznat typické chyby** (klikání, nevypnutý zvuk,
+špatná distortion) popisuje hlavička `tools/audio.py`, sekce „Jak cist vystupy" – AI ji
+má přečíst, než začne zvuk hodnotit.

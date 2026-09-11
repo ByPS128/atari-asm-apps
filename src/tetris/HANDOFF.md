@@ -112,8 +112,11 @@ DLI s WSYNC, PMG včetně hi-res triku a barev po řádcích) + `test_*.py`.
 - Blokující sekvence nesmí používat `tmp*`/`celly` přes volání `RenderGame` (viz `SeqCnt/SeqRow`).
 - V GTIA 10 je okraj = COLPM0 (netýká se nového designu, ale harness to nemodeluje).
 - Řádek 25 (26. řádek) končí na scanline 224 – na NTSC může být oříznut; na PAL OK.
-- `atari800.exe` na H: na tomto Windows nejede (DirectDraw); uživatel testuje ve vlastním
-  emulátoru, my v `tools/emu.py` (render do PNG, `Machine(xex=...)`).
+- `atari800.exe` na H: na tomto Windows nejede (DirectDraw); uživatel testuje v Altirře 4.21
+  (`C:\_ByPS\Atari\Altirra\Altirra-4.21`), my v `tools/emu.py` (render do PNG, `Machine(xex=...)`).
+- Zvuk: `tools/audio.py` syntetizuje POKEY z `pokey_log` – `m.audio_describe(f0)` (Hz, ms, hlasitost),
+  `m.audio_png` (spektrogram, AI si ho prohlédne), `m.audio_wav` (poslech uživatele). Návod, jak
+  výstupy vyhodnocovat, je v hlavičce `audio.py` („Jak cist vystupy"); přehled v `README.md`.
 
 ## 7. Ověření
 

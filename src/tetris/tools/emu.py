@@ -12,6 +12,12 @@ OS neni - hra ho nepouziva (vlastni DL, VBI, cteni HW registru).
 
 Pouziti:  python emu.py [frames] [out.png]
 Skriptovani: viz tridu Machine (set_stick, press_key, consol, ...) a test_tetris.py.
+
+Zvuk: kazdy zapis do POKEY jde do pokey_log; audio.py z nej syntetizuje zvuk.
+  m.audio_describe(f0) / m.audio_text(f0) - useky (kanal, snimek, ms, Hz, hlasitost, typ)
+  m.audio_png('out_x.png', f0)            - spektrogram + obalka (AI si zvuk "prohledne")
+  m.audio_wav('out_x.wav', f0)            - WAV pro poslech clovekem
+Jak vyhodnocovat vystupy: hlavicka audio.py, sekce "Jak cist vystupy".
 """
 import os, sys, random, re
 from cpu6502 import CPU
