@@ -24,7 +24,7 @@ for _ in range(3):
 m.tap(frames_down=3 * F, frames_up=3 * F, fire=True)
 m.run(30 * F)
 rows = m.text_rows(0x6000, 26)
-ok = 'TETRIS - HELP' in rows[1] and 'PRESS ANY KEY OR FIRE TO RETURN' in rows[24] and 'ABANDON GAME' in rows[21]
+ok = 'TETRIS - HELP' in rows[1] and 'ANY KEY = NEXT PAGE' in rows[24] and 'ABANDON GAME' in rows[21]
 code = bytes(m.mem[m.label('HelpScreen'):m.label('HelpScreen') + 8])
 print('\n'.join(rows[:3]))
 if not ok:
