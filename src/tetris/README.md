@@ -7,7 +7,7 @@ ve vyšších obtížnostech začíná se startovními strukturami cihel ve stud
 ## Build
 
 ```
-make.bat            ; = mads tetris.asm -o:tetris.xex -t:tetris.lab (+ design*.xex)
+make.bat            ; = mads tetris.asm -o:tetris.xex -t:tetris.lab
 ```
 
 Výsledek `tetris.xex` spustíš v libovolném emulátoru (Altirra, atari800) nebo na
@@ -32,11 +32,15 @@ přímé čtení hardwaru), takže funguje s BASICem i bez něj.
 - **Menu** – START GAME, LEVEL (1–15), SKILL (EASY / ADVANCED / EXPERT), HELP.
   EASY = prázdná studna a náhled NEXT, ADVANCED = startovní struktury cihel v každém
   levelu, EXPERT = struktury a bez náhledu NEXT.
-- **HELP** – obrazovka s popisem obtížností, levelů a ovládání.
+- **HELP** – dvě stránky: obtížnosti, levely a ovládání; bodování (tabulka bodů za
+  1–4 řady, dropy, bonus za level). Libovolná klávesa listuje, ESC vrací do menu.
 - **Demo** – po ~15 s nečinnosti v menu se spustí demo: AI (heuristika výška /
   díry / nerovnost / smazané řady + náhodný šum) hraje jako průměrný hráč
   lidským tempem. Blikající nápis DEMO nad nápovědou a hláška dole. Jakýkoliv
   vstup demo ukončí.
+- **Barevné kostky** – aktivní kostka a náhled NEXT mají barvu podle typu (I tyrkysová,
+  O žlutá, T fialová, S zelená, Z červená, J modrá, L oranžová) přes hráče P2/P3
+  v dvojnásobné šířce; usazené kostky jsou šedé.
 - **Herní obrazovka** – Graphics 0 (ANTIC mode 2) s vlastním display listem
   26 řádků: studna 10×24 z tenkých čar uprostřed, kostky = plný blok, vpravo
   NEXT (6×6 rámeček, dílek 1:1 ve spawn rotaci), LEVEL, SCORE, LINES, ROWS x/y,
@@ -49,7 +53,10 @@ přímé čtení hardwaru), takže funguje s BASICem i bez něj.
   opakují a přibývají výplňové řady).
 - **Mazání řad** – plné řady 3× bliknou a zmizí se zvukem, vše nad nimi sesedne.
 - **Skóre** – 40 / 100 / 300 / 1200 × level za 1–4 řady, +1 za buňku soft dropu,
-  +2 za buňku hard dropu.
+  +2 za buňku hard dropu. Bonus za řady naskakuje postupně během blikání (24 snímků),
+  rozložený rovnoměrně bez dělení (Bresenham po jednotkách 10 bodů), na konci sedí přesně.
+  Stejně naskakuje bonus za dokončený level (1000 × level, 48 snímků), ten navíc pípá:
+  každý třetí snímek jeden snímek tónu ~960 Hz (kanál 0), jako napočet v Ghostbusters.
 - **Game over** – když nový kus nemá kam spawnout: sestupný zvuk, studna se
   odspodu zaplní, čeká se na FIRE/START.
 - **Zvuky** – POKEY, 4 kanály, jednoduchý sekvencer v VBI (`SoundTick`).
@@ -74,7 +81,7 @@ klávesy nic nedělají.
 
 ## Prototypy designu
 
-`design.asm` (GTIA 10), `design2.asm` (mode 4 + PMG) a `design3.asm` (Graphics 0,
+V `design/` (vlastní `make.bat`): `design.asm` (GTIA 10), `design2.asm` (mode 4 + PMG) a `design3.asm` (Graphics 0,
 schválený vzor) jsou statické mockupy, ze kterých vzešel současný vzhled.
 Historie rozhodnutí je v `HANDOFF.md`.
 
