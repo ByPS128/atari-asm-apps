@@ -151,7 +151,8 @@ def main():
           and all(g in range(GL, GL+6) for g in glyphs[1:-1]), 'hra: po sezrani jedna hlava, tela, jeden ocas')
     check(len(apples(m)) == 1 and sprite_ok(m, *apples(m)[0]), 'hra: nove jablko i se spritem')
     check(sum(m.mem[P0DATA:P0DATA+512]) == 0x60*2 + 0xF0*4 + 0x20 + 0xE0, 'hra: stary sprite jablka zmizel')
-    check(any(a == 1 and v == 0x84 for _, a, v in m.pokey_log), 'hra: zvuk pri sezrani (krup)')
+    eat = [v for _, a, v in m.pokey_log if a == 0 and v in (0x60, 0x40, 0x30)]
+    check(eat[:6] == [0x60, 0x60, 0x40, 0x40, 0x30, 0x30], 'hra: zvuk pri sezrani (stoupavy blip)')
     m.screenshot(os.path.join(HERE, 'out_game.png'))
 
     # naraz do zdi -> GAME OVER
