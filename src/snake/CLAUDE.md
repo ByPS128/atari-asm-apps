@@ -8,9 +8,11 @@ Kontext a mechaniky hry jsou v `README.md`; architektura kódu v hlavičce `snak
   se necommitují (`.gitignore`).
 - **Glyfy hada** (`snake_font.inc`) NEeditovat ručně – jsou generované z `gen_font.py`
   (vzor jednoho glyfu, rotace/zrcadlení). Změna vzhledu = úprava vzoru + `python gen_font.py`.
-- **Po každé změně spusť `python test_snake.py`** – jediný způsob ověření, žádný GUI
-  emulátor na tomto stroji nejede (viz `../tetris/HANDOFF.md`). Test musí končit `ALL OK`.
-  Nové mechaniky pokryj v testu.
+- **Po každé změně spusť `python test_snake.py`** – jediný automatický způsob ověření
+  (viz `../tetris/HANDOFF.md`). Test musí končit `ALL OK`. Nové mechaniky pokryj v testu.
+- **Zvuky ověřuj přes `m.audio_describe(f0)` / `m.audio_png(...)`** (syntéza POKEY v
+  `../tetris/tools/audio.py`, popis v `../tetris/README.md`). Poslechnout zvuk umí jen
+  uživatel (Altirra, `out_*.wav`); AI čte spektrogram a číselný popis (Hz, snímky, hlasitost).
 - **Bez OS.** Hra si vlastní display list, VBI (`Vbi` → `XITVBV`) a čte hardware přímo
   (`PORTA`, `TRIG0`, `SKSTAT`/`KBCODE`, `RANDOM`). Nepoužívej OS shadow registry
   (`STICK0`, `CH`, `SAVMSC`, `RTCLOK`) – harness je neemuluje.
