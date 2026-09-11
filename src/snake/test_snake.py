@@ -62,7 +62,38 @@ def check(cond, msg):
     print('ok  ', msg)
 
 
+def test_startup_text():
+    m = machine()
+    m.mem[m.label('InvMask')] = 0xFF
+    m.run(5)
+    for x, y, text in [(12, 6, 'FOR ATARI XL/XE'),
+                       (3, 20, 'JOYSTICK OR ARROWS, FIRE = SELECT')]:
+        actual = bytes(cell(m, x+i, y) for i in range(len(text)))
+        expected = bytes(ord(c)-32 for c in text)
+        check(actual == expected, 'start: text bez zdedene inverze: ' + text)
+
+
+def test_unused_players():
+    m = machine()
+    # Loader mohl nechat nepouzivane hrace viditelne a jejich RAM nenulovou.
+    m.mem[P0DATA+0x200:P0DATA+0x400] = bytes([0xFF])*0x200
+    for player in (2, 3):
+        m.wr(0xD000+player, 80+20*(player-2))
+        m.wr(0xD008+player, 0)
+        m.wr(0xD012+player, 0x4E)
+    m.run(5)
+    for phase in ('menu', 'hra'):
+        check(all(m.reg(0xD000+p) == 0 or
+                  not any(m.mem[P0DATA+p*0x100:P0DATA+(p+1)*0x100])
+                  for p in (2, 3)), phase + ': zdedeni hraci 2 a 3 nejsou viditelni')
+        if phase == 'menu':
+            m.tap(fire=True)
+            m.run(3)
+
+
 def main():
+    test_startup_text()
+    test_unused_players()
     m = machine()
     m.run(5)
     rows = screen(m)

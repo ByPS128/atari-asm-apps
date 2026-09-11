@@ -275,6 +275,7 @@ start
         sta SndPtr
         sta SndPtr+1
         sta InPrev
+        sta InvMask
         lda #3
         sta SKCTL
         jsr InitFont
@@ -1051,14 +1052,18 @@ IF_g    lda SnakeGlyphs,x
         bpl IF_g
         rts
 
-; vynuluje data hracu 0 a 1 (jablko: telo + listek)
+; vynuluje data vsech hracu; nepouzivane hrace 2 a 3 schova mimo obraz
 InitPMG
         lda #0
         sta ApplePmY
         sta AppleHpos
+        sta HPOSP0+2
+        sta HPOSP0+3
         tax
 IP_l    sta P0DATA,x
         sta P1DATA,x
+        sta P0DATA+$200,x
+        sta P0DATA+$300,x
         inx
         bne IP_l
         rts
