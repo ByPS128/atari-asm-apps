@@ -80,6 +80,10 @@ k jablku, ověří zvuky, rohy v zatáčce a v U, pauzu, narazí do zdi a vrát�
 `out_game.png`, `out_over.png`. Potřebuje přeložený `snake.xex` a `snake.lab`
 (tabulku labelů z `mads -t:`).
 
+Zvuky se ověřují přes syntézu POKEY (`../tetris/tools/audio.py`): test popíše
+zvuk sežrání jako úseky tónů (Hz, snímky, hlasitost) a uloží `out_eat.wav`
+(poslech) a `out_eat.png` (spektrogram + obálka, ze kterého AI zvuk „vidí").
+
 ## Historie
 
 Původní verze (leden 2025) v emulátoru hlásila `BOOT ERROR`: rutiny pro tisk textu

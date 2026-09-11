@@ -2,4 +2,5 @@
 *.adf
 *.bak
 tools/out*.png
+tools/out*.wav
 tools/__pycache__/
