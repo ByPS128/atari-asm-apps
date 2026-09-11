@@ -4,7 +4,7 @@
 ;  - Vlastni znakova sada: had z glyfu 6 px silnych, ktere navazuji
 ;    v zatackach (snake_font.inc generuje gen_font.py), ohrada z ramecovych
 ;    znaku ROM, titulek v ANTIC mode 6 (menu ma vlastni display list).
-;  - Zvuky jako tabulky AUDF/AUDC po snimcich prehravane ve VBI (krup pri
+;  - Zvuky jako tabulky AUDF/AUDC po snimcich prehravane ve VBI (blip pri
 ;    sezrani, alert pri zakazane otocce, ton pri game over).
 ;  - Pauza P / START, ESC = konec hry.
 ;
@@ -1003,7 +1003,7 @@ PlaySound
         stx SndPtr+1
         rts
 
-SoundEat                        ; krup - mix bzucak/ton/sum (podle Worm)
+SoundEat                        ; blip - stoupavy ciste tony, dozniva
         lda #<SfxEat
         ldx #>SfxEat
         bne PlaySound
@@ -1016,7 +1016,7 @@ SoundOver                       ; hluboky ton
         ldx #>SfxOver
         bne PlaySound
 
-SfxEat    dta $5F,$44, $5C,$A6, $57,$84, $5C,$A6, $5C,$A4, $44,$0E, $FF
+SfxEat    dta $60,$A8, $60,$A8, $40,$A8, $40,$A8, $30,$A6, $30,$A4, $FF
 SfxDenied dta $50,$AA, $50,$AA, $50,$AA, $78,$AA, $78,$AA, $78,$AA, $78,$A6, $FF
 SfxOver   :30 dta $F0,$A8
           dta $FF

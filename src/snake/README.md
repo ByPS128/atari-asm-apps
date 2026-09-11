@@ -65,7 +65,7 @@ reálném stroji přes loader. Hra nepoužívá OS (vlastní display list, VBI, 
   pokračuje, ESC v pauze hru ukončí (stejný význam jako ve hře).
 - **Zvuky jako tabulky** dvojic AUDF/AUDC po snímcích (`SfxEat`, `SfxDenied`, `SfxOver`),
   přehrává je VBI přes `SndPtr`; nový zvuk utne předchozí. Sežrání jablka = šestisnímkový
-  „křup" (mix bzučák/tón/šum převzatý z Wormu), denied = klesavý dvoutón (alert) při stisku
+  stoupavý „blip" (tři čisté tóny, poslední doznívá), denied = klesavý dvoutón (alert) při stisku
   opačného směru (joystick i klávesnice), jen při novém stisku, ne při držení.
 
 ## Test
@@ -79,6 +79,10 @@ bez OS): projde menu, ABOUT, rozjede hru, otestuje ignorování otočky, dojede
 k jablku, ověří zvuky, rohy v zatáčce a v U, pauzu, narazí do zdi a vrátí se přes GAME OVER do menu. Ukládá `out_menu.png`,
 `out_game.png`, `out_over.png`. Potřebuje přeložený `snake.xex` a `snake.lab`
 (tabulku labelů z `mads -t:`).
+
+Zvuky se ověřují přes syntézu POKEY (`../tetris/tools/audio.py`): test popíše
+zvuk sežrání jako úseky tónů (Hz, snímky, hlasitost) a uloží `out_eat.wav`
+(poslech) a `out_eat.png` (spektrogram + obálka, ze kterého AI zvuk „vidí").
 
 ## Historie
 

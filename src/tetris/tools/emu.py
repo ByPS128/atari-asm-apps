@@ -12,6 +12,12 @@ OS neni - hra ho nepouziva (vlastni DL, VBI, cteni HW registru).
 
 Pouziti:  python emu.py [frames] [out.png]
 Skriptovani: viz tridu Machine (set_stick, press_key, consol, ...) a test_tetris.py.
+
+Zvuk: kazdy zapis do POKEY jde do pokey_log; audio.py z nej syntetizuje zvuk.
+  m.audio_describe(f0) / m.audio_text(f0) - useky (kanal, snimek, ms, Hz, hlasitost, typ)
+  m.audio_png('out_x.png', f0)            - spektrogram + obalka (AI si zvuk "prohledne")
+  m.audio_wav('out_x.wav', f0)            - WAV pro poslech clovekem
+Jak vyhodnocovat vystupy: hlavicka audio.py, sekce "Jak cist vystupy".
 """
 import os, sys, random, re
 from cpu6502 import CPU
@@ -316,6 +322,43 @@ class Machine:
         img = img.resize((320*scale, h*scale), Image.NEAREST)
         img.save(path)
         return path
+
+    # ---- zvuk (viz audio.py) ----
+    def audio_samples(self, start_frame=0, rate=44100):
+        """Syntetizovany zvuk od snimku start_frame do ted (numpy float32 mono)."""
+        import audio
+        log = [(f - start_frame, a, v) for f, a, v in self.pokey_log if f >= start_frame]
+        # stav registru pred start_frame prenest jako zapisy ve snimku -1
+        pre = {}
+        for f, a, v in self.pokey_log:
+            if f < start_frame: pre[a] = v
+        log = [(-1, a, v) for a, v in pre.items()] + log
+        return audio.render(log, self.frame - start_frame, rate)
+
+    def audio_wav(self, path, start_frame=0, rate=44100, trim=True):
+        """Ulozi zvuk od snimku start_frame do WAV (pro poslech clovekem); trim = bez ticha okolo."""
+        import audio
+        s = self.audio_samples(start_frame, rate)
+        if trim: s, _ = audio.trim(s, rate)
+        return audio.save_wav(s, path, rate)
+
+    def audio_png(self, path, start_frame=0, rate=44100, title=None, trim=True):
+        """Ulozi spektrogram + obalku hlasitosti do PNG (pro 'poslech' AI); osa x = snimky od start_frame."""
+        import audio
+        s = self.audio_samples(start_frame, rate)
+        f0 = 0.0
+        if trim: s, f0 = audio.trim(s, rate)
+        return audio.spectrogram(s, path, rate, title or os.path.basename(path), f0)
+
+    def audio_describe(self, start_frame=0):
+        """Useky zvuku od snimku start_frame: list dict(ch, frame, len, ms, audf, audc, hz, vol, kind)."""
+        import audio
+        log = [(f - start_frame, a, v) for f, a, v in self.pokey_log if f >= start_frame]
+        return audio.describe(log, self.frame - start_frame)
+
+    def audio_text(self, start_frame=0):
+        import audio
+        return audio.format_describe(self.audio_describe(start_frame))
 
     # ---- vstupy ----
     def set_stick(self, up=False, down=False, left=False, right=False):

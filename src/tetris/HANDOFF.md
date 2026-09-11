@@ -126,6 +126,9 @@ DLI s WSYNC, PMG včetně hi-res triku a barev po řádcích) + `test_*.py`.
 - Řádek 25 (26. řádek) končí na scanline 224 – na NTSC může být oříznut; na PAL OK.
 - `atari800.exe` na H: na tomto Windows nejede (DirectDraw); uživatel testuje v Altirře 4.21
   (`C:\_ByPS\Atari\Altirra\Altirra-4.21`), my v `tools/emu.py` (render do PNG, `Machine(xex=...)`).
+- Zvuk: `tools/audio.py` syntetizuje POKEY z `pokey_log` – `m.audio_describe(f0)` (Hz, ms, hlasitost),
+  `m.audio_png` (spektrogram, AI si ho prohlédne), `m.audio_wav` (poslech uživatele). Návod, jak
+  výstupy vyhodnocovat, je v hlavičce `audio.py` („Jak cist vystupy"); přehled v `README.md`.
 - **Kód volaný z VBI/DLI nesmí sdílet ZP proměnné (`ptr`, `ptr2`, `tmp*`) s hlavním kódem.**
   `SoundTick` je původně sdílel; když SFX hrál během kreslení HELP, VBI přepsal `ptr2`
   uprostřed `PutStr`, text se zapsal mimo a Altirra spadla (BRK → SELF TEST). Zvuk má teď

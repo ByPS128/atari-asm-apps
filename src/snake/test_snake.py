@@ -2,7 +2,7 @@
 """Automaticky test snake.xex v headless harnessu ../tetris/tools/emu.py.
 
 Spusteni:  python test_snake.py          (predpoklada prelozeny snake.xex + snake.lab)
-Vystup:    out_menu.png, out_game.png, out_over.png v tomto adresari.
+Vystup:    out_menu.png, out_game.png, out_over.png, out_eat.wav/.png v tomto adresari.
 """
 import os, sys
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -139,6 +139,7 @@ def main():
             m.run(10)
             assert not var(m, 'Dead'), 'cestou k jablku had zemrel'
     m.set_stick(left=(ax < hx), right=(ax > hx)); m.run(10); m.set_stick()
+    f0 = m.frame                  # odsud se nahrava zvuk (out_eat.wav / out_eat.png)
     while snake(m)[0][0] != ax:
         m.run(10)
         assert not var(m, 'Dead'), 'cestou k jablku had zemrel (vodorovne)'
@@ -151,7 +152,14 @@ def main():
           and all(g in range(GL, GL+6) for g in glyphs[1:-1]), 'hra: po sezrani jedna hlava, tela, jeden ocas')
     check(len(apples(m)) == 1 and sprite_ok(m, *apples(m)[0]), 'hra: nove jablko i se spritem')
     check(sum(m.mem[P0DATA:P0DATA+512]) == 0x60*2 + 0xF0*4 + 0x20 + 0xE0, 'hra: stary sprite jablka zmizel')
-    check(any(a == 1 and v == 0x84 for _, a, v in m.pokey_log), 'hra: zvuk pri sezrani (krup)')
+    # zvuk: syntetizovany POKEY (audio.py) - useky kanalu 1 od f0
+    m.audio_wav(os.path.join(HERE, 'out_eat.wav'), f0)
+    m.audio_png(os.path.join(HERE, 'out_eat.png'), f0, title='snake: sezrani jablka')
+    eat = [d for d in m.audio_describe(f0) if d['ch'] == 1][:4]   # dal muze byt uz game over
+    check([d['kind'] for d in eat] == ['tone'] * 4, 'hra: zvuk pri sezrani = ciste tony')
+    check([d['len'] for d in eat] == [2, 2, 1, 1] and [d['vol'] for d in eat] == [8, 8, 6, 4], 'hra: blip 2+2+1+1 snimku, dozniva 6 -> 4')
+    hz = [d['hz'] for d in eat]
+    check(hz[0] < hz[1] < hz[2] == hz[3] and 300 < hz[0] and hz[3] < 700, 'hra: blip stoupa (~330 -> ~650 Hz)')
     m.screenshot(os.path.join(HERE, 'out_game.png'))
 
     # naraz do zdi -> GAME OVER

@@ -95,4 +95,25 @@ PNG včetně DLI/WSYNC a PMG efektů. Potřebuje Pillow.
 cd tools
 python emu.py 120 out.png        # 120 snímků a screenshot
 python test_game.py              # menu, help, hra, level, ADVANCED, EXPERT, pauza, ESC, game over, demo
+python test_audio.py             # unit test syntézy POKEY (tools/audio.py)
 ```
+
+### Zvuk – `tools/audio.py` („uši" harnessu)
+
+Harness loguje každý zápis do POKEY (`Machine.pokey_log`); `audio.py` z něj
+syntetizuje zvuk (PAL, 4 kanály, 64/15 kHz i 1,79 MHz takt, čistý tón, 5bit
+bzučák, 17/9/4bit šum, volume-only). Není: 16bit spojení kanálů, hi-pass
+filtry. Zápisy se uplatňují od snímku následujícího po zápisu (VBI). Metody
+`Machine`:
+
+| metoda | k čemu |
+|---|---|
+| `m.audio_wav('out_x.wav', f0)` | WAV pro poslech člověkem (od snímku `f0`, ticho okolo oříznuté) |
+| `m.audio_png('out_x.png', f0, title=…)` | spektrogram 0–4 kHz + obálka hlasitosti; osa x = snímky (AI si zvuk „prohlédne") |
+| `m.audio_describe(f0)` | úseky konstantního stavu kanálu: `ch`, `frame`, `len`, `ms`, `audf`, `audc`, `hz`, `vol`, `kind` (`tone`, `tone+5bit`, `noise17`, …) – na tom stavěj testy |
+| `m.audio_text(f0)` | totéž jako čitelný text (Hz, ms) |
+
+`out*.wav`/`out*.png` se necommitují. Vzor použití v testu: `../snake/test_snake.py`
+(sežrání jablka). **Jak výstupy číst a poznat typické chyby** (klikání, nevypnutý zvuk,
+špatná distortion) popisuje hlavička `tools/audio.py`, sekce „Jak cist vystupy" – AI ji
+má přečíst, než začne zvuk hodnotit.
