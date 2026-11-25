@@ -113,6 +113,11 @@ znovu sestav XEX a labely; ignorované výstupy Git při checkoutu neaktualizuje
   (mode 4 + PMG + `charset4.inc`) jsou dřívější prototypy.
   Hra tyto include soubory nepoužívá. Schválené rozvržení nevracej ke chunky
   písmu, texturovaným kostkám nebo zvětšenému NEXT bez požadavku uživatele.
+- Vizuální návrh (rozvržení, barvy, písmo) dělej jako samostatný prototyp
+  v `design/` (`.asm` → `.xex`), který si uživatel pustí ve svém emulátoru;
+  PNG z harnessu slouží jen tvé kontrole, uživateli je neposílej. Uživatel chce
+  čistý textový režim, plné bloky a střídmost; odmítl (9. 9. 2026) i GTIA
+  bitmapu, font módu 4 a obří číslo levelu.
 - Hra používá `VVBLKI`, `VDSLST`, `XITVBV` a ROM font přes `CHBASE=$E0`.
   Není nezávislá na OS. Zachovej kontrakt přerušení: `Vbi` se vrací přes
   `XITVBV`, `Dli` obnovuje A/X/Y a končí `RTI`.
